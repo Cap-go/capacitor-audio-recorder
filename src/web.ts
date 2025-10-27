@@ -1,15 +1,15 @@
 import { WebPlugin, type PluginListenerHandle } from '@capacitor/core';
 
-import {
+import type {
   CapacitorAudioRecorderPlugin,
   PermissionState,
   PermissionStatus,
   RecordingErrorEvent,
-  RecordingStatus,
   RecordingStoppedEvent,
   StartRecordingOptions,
   StopRecordingResult,
 } from './definitions';
+import { RecordingStatus } from './definitions';
 
 export class CapacitorAudioRecorderWeb extends WebPlugin implements CapacitorAudioRecorderPlugin {
   private mediaRecorder: MediaRecorder | null = null;
@@ -182,10 +182,18 @@ export class CapacitorAudioRecorderWeb extends WebPlugin implements CapacitorAud
     await super.removeAllListeners();
   }
 
+  async getPluginVersion(): Promise<{ version: string }> {
+    return { version: 'web' };
+  }
+
   // Helpers
 
   private supportsRecorderPause(): boolean {
-    return !!this.mediaRecorder && typeof this.mediaRecorder.pause === 'function' && typeof this.mediaRecorder.resume === 'function';
+    return (
+      !!this.mediaRecorder &&
+      typeof this.mediaRecorder.pause === 'function' &&
+      typeof this.mediaRecorder.resume === 'function'
+    );
   }
 
   private pickMimeType(): string | undefined {
@@ -199,7 +207,10 @@ export class CapacitorAudioRecorderWeb extends WebPlugin implements CapacitorAud
   }
 
   private buildStopResult(): StopRecordingResult {
-    const blob = this.recordedChunks.length > 0 ? new Blob(this.recordedChunks, { type: this.pickMimeType() || 'audio/webm' }) : undefined;
+    const blob =
+      this.recordedChunks.length > 0
+        ? new Blob(this.recordedChunks, { type: this.pickMimeType() || 'audio/webm' })
+        : undefined;
     let duration: number | undefined;
     if (this.startTimestamp) {
       duration = Date.now() - this.startTimestamp - this.accumulatedPauseDuration;

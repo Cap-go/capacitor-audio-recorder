@@ -103,7 +103,7 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
 
         let result: [String: Any] = [
             "duration": durationMilliseconds,
-            "uri": uri,
+            "uri": uri
         ]
 
         notifyListeners("recordingStopped", data: result)
@@ -161,7 +161,7 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
             let uri = currentFileURL?.absoluteString ?? ""
             let result: [String: Any] = [
                 "duration": durationMilliseconds,
-                "uri": uri,
+                "uri": uri
             ]
             notifyListeners("recordingStopped", data: result)
         } else {
@@ -205,7 +205,7 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
             AVSampleRateKey: sampleRate,
             AVNumberOfChannelsKey: 1,
             AVEncoderBitRateKey: bitRate,
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
+            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
         ]
 
         let recorder = try AVAudioRecorder(url: fileURL, settings: settings)

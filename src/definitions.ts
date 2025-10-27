@@ -113,7 +113,7 @@ export interface RecordingErrorEvent {
  *
  * @since 1.0.0
  */
-export type RecordingStoppedEvent = StopRecordingResult
+export type RecordingStoppedEvent = StopRecordingResult;
 
 /**
  * The recording status.
@@ -233,7 +233,10 @@ export interface CapacitorAudioRecorderPlugin {
    *
    * @since 1.0.0
    */
-  addListener(eventName: 'recordingError', listenerFunc: (event: RecordingErrorEvent) => void): Promise<PluginListenerHandle>;
+  addListener(
+    eventName: 'recordingError',
+    listenerFunc: (event: RecordingErrorEvent) => void,
+  ): Promise<PluginListenerHandle>;
 
   /**
    * Listen for pause events emitted when a recording is paused.
@@ -258,4 +261,12 @@ export interface CapacitorAudioRecorderPlugin {
    * @since 1.0.0
    */
   removeAllListeners(): Promise<void>;
+
+  /**
+   * Get the native Capacitor plugin version.
+   *
+   * @returns Promise that resolves with the plugin version
+   * @since 1.0.0
+   */
+  getPluginVersion(): Promise<{ version: string }>;
 }
