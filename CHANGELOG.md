@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.1.2](https://github.com/Cap-go/capacitor-audio-recorder/compare/7.1.1...7.1.2) (2025-10-27)
+
+
+### Bug Fixes
+
+* renovate capacitor dep ([12e7a78](https://github.com/Cap-go/capacitor-audio-recorder/commit/12e7a78f7fbab79265b1a98b3cbb3c9bc9e8e1a0))
+
 ## [7.1.1](https://github.com/Cap-go/capacitor-audio-recorder/compare/7.1.0...7.1.1) (2025-10-27)
 
 
