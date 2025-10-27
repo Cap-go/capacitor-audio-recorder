@@ -1,156 +1,261 @@
 import type { PluginListenerHandle } from '@capacitor/core';
 
 /**
- * Represents the current state and progress of a download task.
+ * Result returned by {@link CapacitorAudioRecorderPlugin.getRecordingStatus}.
+ *
+ * @since 1.0.0
  */
-export interface DownloadTask {
-  /** Unique identifier for the download task */
-  id: string;
-  /** Download progress from 0 to 100 */
-  progress: number;
-  /** Current state of the download */
-  state: 'PENDING' | 'RUNNING' | 'PAUSED' | 'DONE' | 'ERROR';
+export interface GetRecordingStatusResult {
+  /**
+   * The current recording status.
+   *
+   * @since 1.0.0
+   */
+  status: RecordingStatus;
 }
 
 /**
- * Configuration options for starting a download.
+ * Options accepted by {@link CapacitorAudioRecorderPlugin.startRecording}.
+ *
+ * @since 1.0.0
  */
-export interface DownloadOptions {
-  /** Unique identifier for this download task */
-  id: string;
-  /** URL of the file to download */
-  url: string;
-  /** Local file path where the download will be saved */
-  destination: string;
-  /** Optional HTTP headers to include in the request */
-  headers?: { [key: string]: string };
-  /** Network type requirement for download */
-  network?: 'cellular' | 'wifi-only';
-  /** Download priority level */
-  priority?: 'high' | 'normal' | 'low';
+export interface StartRecordingOptions {
+  /**
+   * The audio session category options for recording. Only available on iOS.
+   *
+   * @since 1.0.0
+   */
+  audioSessionCategoryOptions?: AudioSessionCategoryOption[];
+
+  /**
+   * The audio session mode for recording. Only available on iOS.
+   *
+   * @since 1.0.0
+   */
+  audioSessionMode?: AudioSessionMode;
+
+  /**
+   * The audio bit rate in bytes per second.
+   * Only available on Android and iOS.
+   *
+   * @since 1.0.0
+   */
+  bitRate?: number;
+
+  /**
+   * The audio sample rate in Hz.
+   * Only available on Android and iOS.
+   *
+   * @since 1.0.0
+   */
+  sampleRate?: number;
 }
 
 /**
- * Capacitor plugin for downloading files with background support.
- * Provides resumable downloads with progress tracking.
+ * Result returned by {@link CapacitorAudioRecorderPlugin.stopRecording}.
+ *
+ * @since 1.0.0
  */
-export interface CapacitorDownloaderPlugin {
+export interface StopRecordingResult {
   /**
-   * Start a new download task.
+   * The recorded audio as a Blob. Only available on Web.
    *
-   * @param options - Download configuration
-   * @returns Promise with initial download task status
-   * @example
-   * ```typescript
-   * const task = await Downloader.download({
-   *   id: 'my-download',
-   *   url: 'https://example.com/file.pdf',
-   *   destination: 'downloads/file.pdf'
-   * });
-   * ```
+   * @since 1.0.0
    */
-  download(options: DownloadOptions): Promise<DownloadTask>;
+  blob?: Blob;
 
   /**
-   * Pause an active download.
-   * Download can be resumed later from the same position.
+   * The duration of the recording in milliseconds.
    *
-   * @param id - ID of the download task to pause
-   * @returns Promise that resolves when paused
+   * @since 1.0.0
    */
-  pause(id: string): Promise<void>;
+  duration?: number;
 
   /**
-   * Resume a paused download.
-   * Continues from where it was paused.
+   * The URI pointing to the recorded file. Only available on Android and iOS.
    *
-   * @param id - ID of the download task to resume
-   * @returns Promise that resolves when resumed
+   * @since 1.0.0
    */
-  resume(id: string): Promise<void>;
+  uri?: string;
+}
+
+/**
+ * Permission information returned by {@link CapacitorAudioRecorderPlugin.checkPermissions}
+ * and {@link CapacitorAudioRecorderPlugin.requestPermissions}.
+ *
+ * @since 1.0.0
+ */
+export interface PermissionStatus {
+  /**
+   * The permission state for audio recording.
+   *
+   * @since 1.0.0
+   */
+  recordAudio: PermissionState;
+}
+
+/**
+ * Event emitted when an error occurs during recording.
+ *
+ * @since 1.0.0
+ */
+export interface RecordingErrorEvent {
+  /**
+   * The error message.
+   *
+   * @since 1.0.0
+   */
+  message: string;
+}
+
+/**
+ * Event emitted when a recording completes.
+ *
+ * @since 1.0.0
+ */
+export type RecordingStoppedEvent = StopRecordingResult
+
+/**
+ * The recording status.
+ *
+ * @since 1.0.0
+ */
+export enum RecordingStatus {
+  Inactive = 'INACTIVE',
+  Recording = 'RECORDING',
+  Paused = 'PAUSED',
+}
+
+/**
+ * Audio session category options available on iOS.
+ *
+ * @since 1.0.0
+ */
+export enum AudioSessionCategoryOption {
+  AllowAirPlay = 'ALLOW_AIR_PLAY',
+  AllowBluetooth = 'ALLOW_BLUETOOTH',
+  AllowBluetoothA2DP = 'ALLOW_BLUETOOTH_A2DP',
+  DefaultToSpeaker = 'DEFAULT_TO_SPEAKER',
+  DuckOthers = 'DUCK_OTHERS',
+  InterruptSpokenAudioAndMixWithOthers = 'INTERRUPT_SPOKEN_AUDIO_AND_MIX_WITH_OTHERS',
+  MixWithOthers = 'MIX_WITH_OTHERS',
+  OverrideMutedMicrophoneInterruption = 'OVERRIDE_MUTED_MICROPHONE_INTERRUPTION',
+}
+
+/**
+ * Audio session modes available on iOS.
+ *
+ * @since 1.0.0
+ */
+export enum AudioSessionMode {
+  Default = 'DEFAULT',
+  GameChat = 'GAME_CHAT',
+  Measurement = 'MEASUREMENT',
+  SpokenAudio = 'SPOKEN_AUDIO',
+  VideoChat = 'VIDEO_CHAT',
+  VideoRecording = 'VIDEO_RECORDING',
+  VoiceChat = 'VOICE_CHAT',
+}
+
+/**
+ * Platform permission states supported by Capacitor.
+ *
+ * @since 1.0.0
+ */
+export type PermissionState = 'prompt' | 'prompt-with-rationale' | 'granted' | 'denied';
+
+/**
+ * Capacitor plugin contract for recording audio.
+ *
+ * @since 1.0.0
+ */
+export interface CapacitorAudioRecorderPlugin {
+  /**
+   * Start recording audio using the device microphone.
+   *
+   * @param options Recording configuration options.
+   * @since 1.0.0
+   */
+  startRecording(options?: StartRecordingOptions): Promise<void>;
 
   /**
-   * Stop and cancel a download permanently.
-   * Downloaded data will be deleted.
+   * Pause the ongoing recording. Only available on Android (API 24+), iOS, and Web.
    *
-   * @param id - ID of the download task to stop
-   * @returns Promise that resolves when stopped
+   * @since 1.0.0
    */
-  stop(id: string): Promise<void>;
+  pauseRecording(): Promise<void>;
 
   /**
-   * Check the current status of a download.
+   * Resume a previously paused recording.
    *
-   * @param id - ID of the download task to check
-   * @returns Promise with current download task status
+   * @since 1.0.0
    */
-  checkStatus(id: string): Promise<DownloadTask>;
+  resumeRecording(): Promise<void>;
 
   /**
-   * Get information about a downloaded file.
+   * Stop the current recording and persist the recorded audio.
    *
-   * @param path - Local file path to inspect
-   * @returns Promise with file size and MIME type
+   * @returns Recording metadata such as duration and URI/blob.
+   * @since 1.0.0
    */
-  getFileInfo(path: string): Promise<{ size: number; type: string }>;
+  stopRecording(): Promise<StopRecordingResult>;
 
   /**
-   * Listen for download progress updates.
-   * Fired periodically as download progresses.
+   * Cancel the current recording and discard any captured audio.
    *
-   * @param eventName - Must be 'downloadProgress'
-   * @param listenerFunc - Callback receiving progress updates
-   * @returns Promise with listener handle for removal
-   * @example
-   * ```typescript
-   * const listener = await Downloader.addListener('downloadProgress', (data) => {
-   *   console.log(`Download ${data.id}: ${data.progress}%`);
-   * });
-   * ```
+   * @since 1.0.0
+   */
+  cancelRecording(): Promise<void>;
+
+  /**
+   * Retrieve the current recording status.
+   *
+   * @since 1.0.0
+   */
+  getRecordingStatus(): Promise<GetRecordingStatusResult>;
+
+  /**
+   * Return the current permission state for accessing the microphone.
+   *
+   * @since 1.0.0
+   */
+  checkPermissions(): Promise<PermissionStatus>;
+
+  /**
+   * Request permission to access the microphone.
+   *
+   * @since 1.0.0
+   */
+  requestPermissions(): Promise<PermissionStatus>;
+
+  /**
+   * Listen for recording errors.
+   *
+   * @since 1.0.0
+   */
+  addListener(eventName: 'recordingError', listenerFunc: (event: RecordingErrorEvent) => void): Promise<PluginListenerHandle>;
+
+  /**
+   * Listen for pause events emitted when a recording is paused.
+   *
+   * @since 1.0.0
+   */
+  addListener(eventName: 'recordingPaused', listenerFunc: () => void): Promise<PluginListenerHandle>;
+
+  /**
+   * Listen for recording completion events.
+   *
+   * @since 1.0.0
    */
   addListener(
-    eventName: 'downloadProgress',
-    listenerFunc: (progress: { id: string; progress: number }) => void,
+    eventName: 'recordingStopped',
+    listenerFunc: (event: RecordingStoppedEvent) => void,
   ): Promise<PluginListenerHandle>;
 
   /**
-   * Listen for download completion.
-   * Fired when a download finishes successfully.
+   * Remove all registered listeners.
    *
-   * @param eventName - Must be 'downloadCompleted'
-   * @param listenerFunc - Callback receiving completion notification
-   * @returns Promise with listener handle for removal
-   */
-  addListener(
-    eventName: 'downloadCompleted',
-    listenerFunc: (result: { id: string }) => void,
-  ): Promise<PluginListenerHandle>;
-
-  /**
-   * Listen for download failures.
-   * Fired when a download encounters an error.
-   *
-   * @param eventName - Must be 'downloadFailed'
-   * @param listenerFunc - Callback receiving error information
-   * @returns Promise with listener handle for removal
-   */
-  addListener(
-    eventName: 'downloadFailed',
-    listenerFunc: (error: { id: string; error: string }) => void,
-  ): Promise<PluginListenerHandle>;
-
-  /**
-   * Remove all event listeners.
-   * Cleanup method to prevent memory leaks.
-   *
-   * @returns Promise that resolves when all listeners removed
+   * @since 1.0.0
    */
   removeAllListeners(): Promise<void>;
-
-  /**
-   * Get the plugin version number.
-   *
-   * @returns Promise with version string
-   */
-  getPluginVersion(): Promise<{ version: string }>;
 }

@@ -1,10 +1,10 @@
 import { registerPlugin } from '@capacitor/core';
 
-import type { CapacitorDownloaderPlugin } from './definitions';
+import type { CapacitorAudioRecorderPlugin } from './definitions';
 
-const CapacitorDownloader = registerPlugin<CapacitorDownloaderPlugin>('CapacitorDownloader', {
-  web: () => import('./web').then((m) => new m.CapacitorDownloaderWeb()),
+const CapacitorAudioRecorder = registerPlugin<CapacitorAudioRecorderPlugin>('CapacitorAudioRecorder', {
+  web: () => import('./web').then((m) => new m.CapacitorAudioRecorderWeb()),
 });
 
 export * from './definitions';
-export { CapacitorDownloader };
+export { CapacitorAudioRecorder };

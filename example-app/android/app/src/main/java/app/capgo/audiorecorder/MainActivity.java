@@ -1,4 +1,4 @@
-package app.capgo.downloader;
+package app.capgo.audiorecorder;
 
 import com.getcapacitor.BridgeActivity;
 

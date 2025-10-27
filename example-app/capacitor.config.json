@@ -1,6 +1,6 @@
 {
-  "appId": "app.capgo.downloader",
-  "appName": "Downloader Example",
+  "appId": "app.capgo.audiorecorder",
+  "appName": "Audio Recorder Example",
   "webDir": "dist",
   "plugins": {
     "SplashScreen": {

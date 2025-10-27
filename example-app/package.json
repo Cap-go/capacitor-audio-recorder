@@ -1,7 +1,7 @@
 {
   "name": "capacitor-app",
   "version": "1.0.0",
-  "description": "Example Capacitor app for @capgo/capacitor-downloader",
+  "description": "Example Capacitor app for @capgo/capacitor-audio-recorder",
   "type": "module",
   "keywords": [
     "capacitor",
@@ -16,7 +16,7 @@
     "@capacitor/core": "latest",
     "@capacitor/android": "7.0.0",
     "@capacitor/ios": "7.0.0",
-    "@capgo/capacitor-downloader": "file:.."
+    "@capgo/capacitor-audio-recorder": "file:.."
   },
   "devDependencies": {
     "@capacitor/cli": "latest",

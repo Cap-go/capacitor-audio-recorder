@@ -3,19 +3,48 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@capgo/capacitor-downloader Example</title>
+    <title>@capgo/capacitor-audio-recorder Example</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <main class="container">
-      <h1>@capgo/capacitor-downloader Example</h1>
-      <p class="lead">Run native plugin APIs with the source linked locally.</p>
-      <label for="action-select">Available actions</label>
-      <select id="action-select"></select>
-      <div id="action-description" class="action-description"></div>
-      <div id="action-form" class="form-grid"></div>
-      <button id="run-action">Run action</button>
-      <pre id="plugin-output">Select an action to begin.</pre>
+      <h1>@capgo/capacitor-audio-recorder Example</h1>
+      <p class="lead">
+        Record short samples, pause/resume mid-way, and inspect the duration or file URI returned by the native plugin.
+      </p>
+
+      <div class="status-grid">
+        <div class="status-card">
+          <h2>Status</h2>
+          <p id="status">INACTIVE</p>
+        </div>
+        <div class="status-card">
+          <h2>Permission</h2>
+          <p id="permission">Checking...</p>
+        </div>
+      </div>
+
+      <div class="readout">
+        <div class="readout-row">
+          <span class="label">Last Duration</span>
+          <span class="value" id="duration">—</span>
+        </div>
+        <div class="readout-row">
+          <span class="label">Last URI / Blob</span>
+          <span class="value" id="uri">—</span>
+        </div>
+      </div>
+
+      <p class="message" id="message"></p>
+
+      <div class="actions">
+        <button id="start-recording">Start Recording</button>
+        <button id="pause-recording" class="secondary" disabled>Pause</button>
+        <button id="resume-recording" class="secondary" disabled>Resume</button>
+        <button id="stop-recording" class="secondary" disabled>Stop</button>
+        <button id="cancel-recording" class="secondary" disabled>Cancel</button>
+        <button id="refresh-status" class="secondary">Refresh Status</button>
+      </div>
     </main>
     <script type="module" src="/src/main.js"></script>
   </body>

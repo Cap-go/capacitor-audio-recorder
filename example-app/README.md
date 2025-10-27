@@ -1,15 +1,14 @@
-# Example App for `@capgo/capacitor-downloader`
+# Example App for `@capgo/capacitor-audio-recorder`
 
-This Vite project links directly to the local plugin source so you can exercise the native APIs while developing.
+This Vite project links directly to the local plugin source so you can exercise recording, pause/resume, and stop flows while developing the native implementation.
 
-## Actions in this playground
+## Playground actions
 
-- **Start download** – Starts a background download (native platforms).
-- **Check status** – Queries progress for an existing download id.
-- **Pause download** – Pauses a running download (Android).
-- **Resume download** – Resumes a paused download (Android).
-- **Stop download** – Stops a download task.
-- **Get file info** – Reads metadata for a downloaded file.
+- **Start recording** – Requests microphone permissions (if needed) and begins capturing audio.
+- **Pause / Resume** – Toggles recording without losing the current buffer (requires Android API 24+, iOS, or Web support).
+- **Stop recording** – Finalises the recording and prints the resulting duration and file URI / blob reference.
+- **Cancel** – Aborts the session and discards any captured audio.
+- **Refresh status** – Queries the plugin for the current `RecordingStatus`.
 
 ## Getting started
 
