@@ -38,6 +38,7 @@ npx cap sync
 * [`addListener('recordingPaused', ...)`](#addlistenerrecordingpaused-)
 * [`addListener('recordingStopped', ...)`](#addlistenerrecordingstopped-)
 * [`removeAllListeners()`](#removealllisteners)
+* [`getPluginVersion()`](#getpluginversion)
 * [Interfaces](#interfaces)
 * [Type Aliases](#type-aliases)
 * [Enums](#enums)
@@ -232,6 +233,21 @@ removeAllListeners() => Promise<void>
 ```
 
 Remove all registered listeners.
+
+**Since:** 1.0.0
+
+--------------------
+
+
+### getPluginVersion()
+
+```typescript
+getPluginVersion() => Promise<{ version: string; }>
+```
+
+Get the native Capacitor plugin version.
+
+**Returns:** <code>Promise&lt;{ version: string; }&gt;</code>
 
 **Since:** 1.0.0
 
