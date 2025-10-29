@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.1.3](https://github.com/Cap-go/capacitor-audio-recorder/compare/7.1.2...7.1.3) (2025-10-29)
+
+
+### Bug Fixes
+
+* CI/CD config ([228ac06](https://github.com/Cap-go/capacitor-audio-recorder/commit/228ac065213a4016951c5c3ce11c9ed61c9320a0))
+* update AI model in build workflow ([c990e12](https://github.com/Cap-go/capacitor-audio-recorder/commit/c990e1264bd8dcb7f151f9206844d1319cc7bc7d))
+* update github action ([5c48adf](https://github.com/Cap-go/capacitor-audio-recorder/commit/5c48adf3814ad37d147d404c7438190f093b91e3))
+
 ## [7.1.2](https://github.com/Cap-go/capacitor-audio-recorder/compare/7.1.1...7.1.2) (2025-10-27)
 
 
