@@ -11,6 +11,18 @@ Capture audio clips across iOS, Android, and the Web with a consistent Capacitor
 
 WIP: the plugin is not yet ready for production
 
+## Why Capacitor Audio Recorder?
+
+The only **free** and **up-to-date** audio recording plugin for Capacitor:
+
+- **Same JavaScript API** - Compatible interface with paid plugins
+- **Full feature set** - Pause/resume, configurable bitrates, sample rates
+- **Cross-platform** - iOS, Android, and Web support
+- **Modern implementation** - Uses latest platform APIs
+- **Event listeners** - Real-time recording status and error handling
+
+Perfect for voice memo apps, audio messaging, podcast recording, and any app needing audio capture.
+
 ## Documentation
 
 The most complete doc is available here: https://capgo.app/docs/plugins/audio-recorder/
