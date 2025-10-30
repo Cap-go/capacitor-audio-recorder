@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.1.4](https://github.com/Cap-go/capacitor-audio-recorder/compare/7.1.3...7.1.4) (2025-10-30)
+
+
+### Bug Fixes
+
+* pluginVersion lint issue ([8ea62e1](https://github.com/Cap-go/capacitor-audio-recorder/commit/8ea62e1947eb2603d297dfba75b5960df8ac8b63))
+* update package reference from capacitor-downloader to capacitor-audio-recorder ([f0577ec](https://github.com/Cap-go/capacitor-audio-recorder/commit/f0577ecb954e21726f6f703a942cd5c85d098e92))
+
 ## [7.1.3](https://github.com/Cap-go/capacitor-audio-recorder/compare/7.1.2...7.1.3) (2025-10-29)
 
 
