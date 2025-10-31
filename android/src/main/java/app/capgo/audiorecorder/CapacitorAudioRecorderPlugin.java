@@ -25,7 +25,7 @@ import java.util.Locale;
 )
 public class CapacitorAudioRecorderPlugin extends com.getcapacitor.Plugin {
 
-    private final String pluginVersion = "7.1.5";
+    private final String pluginVersion = "7.1.6";
 
     private enum RecordingStatus {
         INACTIVE,
