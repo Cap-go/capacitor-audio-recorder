@@ -9,8 +9,6 @@
 
 Capture audio clips across iOS, Android, and the Web with a consistent Capacitor API.
 
-WIP: the plugin is not yet ready for production
-
 ## Why Capacitor Audio Recorder?
 
 The only **free** and **up-to-date** audio recording plugin for Capacitor:
