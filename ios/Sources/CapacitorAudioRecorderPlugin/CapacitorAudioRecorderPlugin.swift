@@ -279,10 +279,7 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         case "ALLOW_BLUETOOTH":
             return .allowBluetooth
         case "ALLOW_BLUETOOTH_A2DP":
-            if #available(iOS 10.0, *) {
-                return .allowBluetoothA2DP
-            }
-            return nil
+            return .allowBluetoothA2DP
         case "DEFAULT_TO_SPEAKER":
             return .defaultToSpeaker
         case "DUCK_OTHERS":
@@ -292,10 +289,7 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         case "MIX_WITH_OTHERS":
             return .mixWithOthers
         case "OVERRIDE_MUTED_MICROPHONE_INTERRUPTION":
-            if #available(iOS 14.5, *) {
-                return .overrideMutedMicrophoneInterruption
-            }
-            return nil
+            return .overrideMutedMicrophoneInterruption
         default:
             return nil
         }
