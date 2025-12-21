@@ -3,7 +3,6 @@ package app.capgo.audiorecorder;
 import android.Manifest;
 import android.media.MediaRecorder;
 import android.net.Uri;
-import android.os.Build;
 import android.os.SystemClock;
 import androidx.annotation.Nullable;
 import com.getcapacitor.JSObject;
@@ -78,11 +77,6 @@ public class CapacitorAudioRecorderPlugin extends com.getcapacitor.Plugin {
             return;
         }
 
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
-            call.reject("Pausing is not supported on this Android version.");
-            return;
-        }
-
         try {
             mediaRecorder.pause();
             pauseStartTime = SystemClock.elapsedRealtime();
@@ -98,11 +92,6 @@ public class CapacitorAudioRecorderPlugin extends com.getcapacitor.Plugin {
     public void resumeRecording(PluginCall call) {
         if (status != RecordingStatus.PAUSED || mediaRecorder == null) {
             call.reject("No paused recording to resume.");
-            return;
-        }
-
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
-            call.reject("Resuming is not supported on this Android version.");
             return;
         }
 
