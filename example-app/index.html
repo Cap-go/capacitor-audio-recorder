@@ -33,6 +33,14 @@
           <span class="label">Last URI / Blob</span>
           <span class="value" id="uri">—</span>
         </div>
+        <div class="readout-row">
+          <span class="label">File Size (read via Filesystem)</span>
+          <span class="value" id="file-size">—</span>
+        </div>
+        <div class="readout-row">
+          <span class="label">File Size (read via Fetch)</span>
+          <span class="value" id="file-size-fetch">—</span>
+        </div>
       </div>
 
       <p class="message" id="message"></p>
@@ -43,6 +51,8 @@
         <button id="resume-recording" class="secondary" disabled>Resume</button>
         <button id="stop-recording" class="secondary" disabled>Stop</button>
         <button id="cancel-recording" class="secondary" disabled>Cancel</button>
+        <button id="read-file" class="secondary" disabled>Read File (Filesystem)</button>
+        <button id="read-file-fetch" class="secondary" disabled>Read File (Fetch)</button>
         <button id="refresh-status" class="secondary">Refresh Status</button>
       </div>
     </main>

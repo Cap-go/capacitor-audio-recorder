@@ -3,11 +3,15 @@ import {
   CapacitorAudioRecorder,
   RecordingStatus,
 } from '@capgo/capacitor-audio-recorder';
+import { Filesystem } from '@capacitor/filesystem';
+import { Capacitor } from '@capacitor/core';
 
 const statusLabel = document.getElementById('status');
 const permissionLabel = document.getElementById('permission');
 const durationLabel = document.getElementById('duration');
 const uriLabel = document.getElementById('uri');
+const fileSizeLabel = document.getElementById('file-size');
+const fileSizeFetchLabel = document.getElementById('file-size-fetch');
 const messageLabel = document.getElementById('message');
 
 const startButton = document.getElementById('start-recording');
@@ -15,7 +19,12 @@ const pauseButton = document.getElementById('pause-recording');
 const resumeButton = document.getElementById('resume-recording');
 const stopButton = document.getElementById('stop-recording');
 const cancelButton = document.getElementById('cancel-recording');
+const readFileButton = document.getElementById('read-file');
+const readFileFetchButton = document.getElementById('read-file-fetch');
 const statusButton = document.getElementById('refresh-status');
+
+let lastRecordedUri = null;
+let lastRecordedBlob = null;
 
 let isSupported = true;
 
@@ -107,6 +116,89 @@ cancelButton.addEventListener('click', async () => {
   }
 });
 
+readFileButton.addEventListener('click', async () => {
+  if (!lastRecordedUri) {
+    showMessage('No recorded file URI available. Please record first.');
+    return;
+  }
+
+  try {
+    showMessage('Reading file...');
+    
+    // Convert file:// URI to a path that Filesystem API can use
+    // On iOS: file:///var/mobile/... -> /var/mobile/...
+    // On Android: file:///data/data/... -> /data/data/...
+    let filePath = lastRecordedUri;
+    if (filePath.startsWith('file://')) {
+      filePath = filePath.replace('file://', '');
+    }
+
+    // Read the file using Filesystem API
+    // For binary audio files, read without encoding to get base64 data
+    const result = await Filesystem.readFile({
+      path: filePath,
+    });
+
+    // Calculate file size from base64 data
+    // Base64 encoding increases size by ~33%, so decode to get actual binary size
+    if (result.data) {
+      const base64Length = result.data.length;
+      // Base64 is 4/3 the size of binary data
+      const estimatedBinarySize = Math.round((base64Length * 3) / 4);
+      fileSizeLabel.textContent = `~${estimatedBinarySize} bytes (read via Filesystem API)`;
+      showMessage(`File read successfully. Base64 length: ${base64Length} chars`);
+    } else {
+      fileSizeLabel.textContent = 'Unknown size';
+      showMessage('File read but no data returned.');
+    }
+  } catch (error) {
+    fileSizeLabel.textContent = 'Error reading file';
+    showMessage(`Failed to read file: ${error?.message ?? String(error)}`);
+  }
+});
+
+readFileFetchButton.addEventListener('click', async () => {
+  try {
+    showMessage('Reading file via fetch...');
+
+    // Handle web platform (blob)
+    if (lastRecordedBlob) {
+      // For web, we already have the blob, so we can get its size directly
+      const blobSize = lastRecordedBlob.size;
+      fileSizeFetchLabel.textContent = `${blobSize} bytes (read via Fetch from Blob)`;
+      showMessage(`Blob size: ${blobSize} bytes`);
+      return;
+    }
+
+    // Handle native platforms (URI)
+    if (!lastRecordedUri) {
+      showMessage('No recorded file URI available. Please record first.');
+      return;
+    }
+
+    // Convert file:// URI to a fetchable URL using Capacitor's convertFileSrc
+    // This converts file:// URIs to capacitor:// URLs that can be fetched
+    const fetchableUrl = Capacitor.convertFileSrc(lastRecordedUri);
+
+    // Fetch the file
+    const response = await fetch(fetchableUrl);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    // Get the file as a blob
+    const blob = await response.blob();
+    const fileSize = blob.size;
+
+    fileSizeFetchLabel.textContent = `${fileSize} bytes (read via Fetch API)`;
+    showMessage(`File read successfully via fetch. Size: ${fileSize} bytes`);
+  } catch (error) {
+    fileSizeFetchLabel.textContent = 'Error reading file';
+    showMessage(`Failed to read file via fetch: ${error?.message ?? String(error)}`);
+  }
+});
+
 statusButton.addEventListener('click', () => {
   refreshStatus().catch((error) => showMessage(error?.message ?? String(error)));
 });
@@ -133,10 +225,28 @@ function applyStopResult(result) {
   }
   if (result.uri) {
     uriLabel.textContent = result.uri;
+    lastRecordedUri = result.uri;
+    lastRecordedBlob = null;
+    readFileButton.disabled = false;
+    readFileFetchButton.disabled = false;
+    fileSizeLabel.textContent = '—';
+    fileSizeFetchLabel.textContent = '—';
   } else if (result.blob) {
     uriLabel.textContent = `Blob size: ${result.blob.size} bytes`;
+    lastRecordedUri = null;
+    lastRecordedBlob = result.blob;
+    readFileButton.disabled = true;
+    readFileFetchButton.disabled = false;
+    fileSizeLabel.textContent = '—';
+    fileSizeFetchLabel.textContent = '—';
   } else {
     uriLabel.textContent = 'Unavailable';
+    lastRecordedUri = null;
+    lastRecordedBlob = null;
+    readFileButton.disabled = true;
+    readFileFetchButton.disabled = true;
+    fileSizeLabel.textContent = '—';
+    fileSizeFetchLabel.textContent = '—';
   }
 }
 
