@@ -19,3 +19,15 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Keep Capacitor plugin classes and their methods
+-keep class app.capgo.audiorecorder.** { *; }
+-keepclassmembers class * extends com.getcapacitor.Plugin {
+    @com.getcapacitor.annotation.PermissionCallback *;
+    @com.getcapacitor.PluginMethod *;
+}
+
+# Keep plugin annotations
+-keepattributes *Annotation*
+-keepattributes Signature
+-keepattributes Exceptions

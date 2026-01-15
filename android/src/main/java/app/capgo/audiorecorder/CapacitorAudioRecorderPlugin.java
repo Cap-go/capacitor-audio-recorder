@@ -165,7 +165,8 @@ public class CapacitorAudioRecorderPlugin extends com.getcapacitor.Plugin {
 
     @PluginMethod
     public void requestPermissions(PluginCall call) {
-        if (getPermissionState("microphone") == PermissionState.GRANTED) {
+        PermissionState state = getPermissionState("microphone");
+        if (state != null && state == PermissionState.GRANTED) {
             JSObject result = new JSObject();
             result.put("recordAudio", "granted");
             call.resolve(result);
@@ -195,7 +196,7 @@ public class CapacitorAudioRecorderPlugin extends com.getcapacitor.Plugin {
 
     private boolean ensurePermission(PluginCall call) {
         PermissionState state = getPermissionState("microphone");
-        if (state == PermissionState.GRANTED) {
+        if (state != null && state == PermissionState.GRANTED) {
             return true;
         }
         requestPermissionForAlias("microphone", call, "microphonePermissionStartCallback");
@@ -204,7 +205,8 @@ public class CapacitorAudioRecorderPlugin extends com.getcapacitor.Plugin {
 
     @PermissionCallback
     public void microphonePermissionStartCallback(PluginCall call) {
-        if (getPermissionState("microphone") != PermissionState.GRANTED) {
+        PermissionState state = getPermissionState("microphone");
+        if (state == null || state != PermissionState.GRANTED) {
             call.reject("Microphone permission not granted.");
             return;
         }
@@ -262,6 +264,9 @@ public class CapacitorAudioRecorderPlugin extends com.getcapacitor.Plugin {
     }
 
     private String toPermissionString(PermissionState state) {
+        if (state == null) {
+            return "prompt";
+        }
         switch (state) {
             case GRANTED:
                 return "granted";
