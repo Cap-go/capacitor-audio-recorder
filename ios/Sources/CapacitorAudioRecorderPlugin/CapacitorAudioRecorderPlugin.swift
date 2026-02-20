@@ -4,7 +4,7 @@ import Foundation
 
 @objc(CapacitorAudioRecorderPlugin)
 public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioRecorderDelegate {
-    private let pluginVersion: String = "8.0.11"
+    private let pluginVersion: String = "8.0.12"
     public let identifier = "CapacitorAudioRecorderPlugin"
     public let jsName = "CapacitorAudioRecorder"
     public let pluginMethods: [CAPPluginMethod] = [
