@@ -270,6 +270,8 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         recordingStartDate = nil
         pauseStartDate = nil
         accumulatedPauseDuration = 0
+        pendingStopCall = nil
+        capturedDuration = 0
     }
 
     private func deactivateSessionIfNeeded() {
