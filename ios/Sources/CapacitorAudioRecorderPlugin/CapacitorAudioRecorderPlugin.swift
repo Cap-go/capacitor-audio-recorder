@@ -151,6 +151,7 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
             pendingStopCall = nil
         }
 
+        deactivateSessionIfNeeded()
         resetRecorder(deleteFile: true)
         notifyListeners("recordingError", data: ["message": message])
     }
