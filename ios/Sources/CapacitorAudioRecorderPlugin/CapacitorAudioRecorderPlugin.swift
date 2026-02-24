@@ -96,6 +96,11 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
             return
         }
 
+        guard pendingStopCall == nil else {
+            call.reject("A stop operation is already in progress.")
+            return
+        }
+
         // Capture duration BEFORE stop — currentTime resets to 0 after stop()
         capturedDuration = recorder.currentTime * 1000
         shouldEmitStoppedEvent = false
@@ -108,6 +113,11 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         if let pending = pendingStopCall {
             pending.reject("Recording was cancelled.")
             pendingStopCall = nil
+            // Recorder is already stopping; deactivate and clean up.
+            deactivateSessionIfNeeded()
+            resetRecorder(deleteFile: true)
+            call.resolve()
+            return
         }
 
         guard audioRecorder != nil else {
