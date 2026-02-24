@@ -34,6 +34,8 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
     private var pauseStartDate: Date?
     private var accumulatedPauseDuration: TimeInterval = 0
     private var shouldEmitStoppedEvent = true
+    private var pendingStopCall: CAPPluginCall?
+    private var capturedDuration: Double = 0
 
     // MARK: - Plugin methods
 
@@ -94,24 +96,30 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
             return
         }
 
+        guard pendingStopCall == nil else {
+            call.reject("A stop operation is already in progress.")
+            return
+        }
+
+        // Capture duration BEFORE stop — currentTime resets to 0 after stop()
+        capturedDuration = recorder.currentTime * 1000
         shouldEmitStoppedEvent = false
+        pendingStopCall = call
         recorder.stop()
-        deactivateSessionIfNeeded()
-
-        let durationMilliseconds = recorder.currentTime * 1000
-        let uri = currentFileURL?.absoluteString ?? ""
-
-        let result: [String: Any] = [
-            "duration": durationMilliseconds,
-            "uri": uri
-        ]
-
-        notifyListeners("recordingStopped", data: result)
-        call.resolve(result)
-        resetRecorder(deleteFile: false)
+        // Resolution deferred to audioRecorderDidFinishRecording delegate
     }
 
     @objc func cancelRecording(_ call: CAPPluginCall) {
+        if let pending = pendingStopCall {
+            pending.reject("Recording was cancelled.")
+            pendingStopCall = nil
+            // Recorder is already stopping; deactivate and clean up.
+            deactivateSessionIfNeeded()
+            resetRecorder(deleteFile: true)
+            call.resolve()
+            return
+        }
+
         guard audioRecorder != nil else {
             resetRecorder(deleteFile: true)
             call.resolve()
@@ -146,12 +154,42 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
     // MARK: - AVAudioRecorderDelegate
 
     public func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
-        resetRecorder(deleteFile: true)
         let message = error?.localizedDescription ?? "Unknown encoding error."
+
+        if let pending = pendingStopCall {
+            pending.reject("Encoding error: \(message)")
+            pendingStopCall = nil
+        }
+
+        deactivateSessionIfNeeded()
+        resetRecorder(deleteFile: true)
         notifyListeners("recordingError", data: ["message": message])
     }
 
     public func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
+        // If stopRecording() is waiting, resolve/reject and clean up.
+        if let pending = pendingStopCall {
+            pendingStopCall = nil
+
+            if flag {
+                let uri = currentFileURL?.absoluteString ?? ""
+                let result: [String: Any] = [
+                    "duration": capturedDuration,
+                    "uri": uri
+                ]
+                notifyListeners("recordingStopped", data: result)
+                pending.resolve(result)
+            } else {
+                notifyListeners("recordingError", data: ["message": "Recording finished unsuccessfully."])
+                pending.reject("Recording finished unsuccessfully.")
+            }
+
+            deactivateSessionIfNeeded()
+            resetRecorder(deleteFile: !flag)
+            return
+        }
+
+        // Spontaneous stop (e.g. interruption) — no pending JS call.
         guard shouldEmitStoppedEvent else {
             return
         }
@@ -232,6 +270,8 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         recordingStartDate = nil
         pauseStartDate = nil
         accumulatedPauseDuration = 0
+        pendingStopCall = nil
+        capturedDuration = 0
     }
 
     private func deactivateSessionIfNeeded() {
