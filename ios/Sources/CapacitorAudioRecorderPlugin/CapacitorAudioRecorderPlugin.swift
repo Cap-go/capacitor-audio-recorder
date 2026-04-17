@@ -14,6 +14,7 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         CAPPluginMethod(name: "stopRecording", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "cancelRecording", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getRecordingStatus", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getCurrentAmplitude", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "checkPermissions", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "requestPermissions", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "removeAllListeners", returnType: CAPPluginReturnPromise),
@@ -129,6 +130,18 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         call.resolve(["status": status.rawValue])
     }
 
+    @objc func getCurrentAmplitude(_ call: CAPPluginCall) {
+        guard let recorder = audioRecorder, status == .recording else {
+            call.resolve(["value": 0.0])
+            return
+        }
+        recorder.updateMeters()
+        let averagePowerDb = Double(recorder.averagePower(forChannel: 0))
+        let linear: Double = averagePowerDb.isFinite ? pow(10.0, averagePowerDb / 20.0) : 0.0
+        let value = max(0.0, min(1.0, linear))
+        call.resolve(["value": value])
+    }
+
     @objc override public func checkPermissions(_ call: CAPPluginCall) {
         call.resolve(["recordAudio": microphonePermissionState()])
     }
@@ -210,6 +223,7 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
 
         let recorder = try AVAudioRecorder(url: fileURL, settings: settings)
         recorder.delegate = self
+        recorder.isMeteringEnabled = true
         recorder.prepareToRecord()
         recorder.record()
 

@@ -15,6 +15,28 @@ export interface GetRecordingStatusResult {
 }
 
 /**
+ * Result returned by {@link CapacitorAudioRecorderPlugin.getCurrentAmplitude}.
+ *
+ * @since 8.1.0
+ */
+export interface GetCurrentAmplitudeResult {
+  /**
+   * The current input amplitude normalized to the `[0, 1]` range, where `0`
+   * represents silence and `1` represents the maximum level the platform can
+   * report. The value is `0` when no recording is active.
+   *
+   * Note: the source signal differs between platforms — Android reports the
+   * peak sample amplitude since the last call, iOS reports the average power
+   * in dB converted to linear, and Web reports the RMS of the latest frame.
+   * Consumers that need cross-platform parity may want to apply a
+   * per-platform scaling curve.
+   *
+   * @since 8.1.0
+   */
+  value: number;
+}
+
+/**
  * Options accepted by {@link CapacitorAudioRecorderPlugin.startRecording}.
  *
  * @since 1.0.0
@@ -213,6 +235,19 @@ export interface CapacitorAudioRecorderPlugin {
    * @since 1.0.0
    */
   getRecordingStatus(): Promise<GetRecordingStatusResult>;
+
+  /**
+   * Retrieve the current input amplitude (microphone level) as a normalized
+   * number in the `[0, 1]` range.
+   *
+   * Intended for driving live visualizations such as VU meters or waveforms
+   * while recording. Returns `0` when no recording is active. Safe to poll
+   * at any cadence (~60–100ms is typical for waveforms).
+   *
+   * @returns The current amplitude.
+   * @since 8.1.0
+   */
+  getCurrentAmplitude(): Promise<GetCurrentAmplitudeResult>;
 
   /**
    * Return the current permission state for accessing the microphone.

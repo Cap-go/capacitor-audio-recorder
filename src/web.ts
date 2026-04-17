@@ -2,6 +2,7 @@ import { WebPlugin, type PluginListenerHandle } from '@capacitor/core';
 
 import type {
   CapacitorAudioRecorderPlugin,
+  GetCurrentAmplitudeResult,
   PermissionState,
   PermissionStatus,
   RecordingErrorEvent,
@@ -21,6 +22,9 @@ export class CapacitorAudioRecorderWeb extends WebPlugin implements CapacitorAud
   private accumulatedPauseDuration = 0;
   private stopResolver: ((result: StopRecordingResult) => void) | null = null;
   private stopRejector: ((reason?: any) => void) | null = null;
+  private audioContext: AudioContext | null = null;
+  private analyser: AnalyserNode | null = null;
+  private analyserBuffer: Float32Array<ArrayBuffer> | null = null;
 
   async startRecording(_options?: StartRecordingOptions): Promise<void> {
     if (this.status === RecordingStatus.Recording || this.status === RecordingStatus.Paused) {
@@ -75,6 +79,8 @@ export class CapacitorAudioRecorderWeb extends WebPlugin implements CapacitorAud
       this.resetStopHandlers();
       this.resetState();
     });
+
+    this.setupAnalyser();
 
     this.mediaRecorder.start();
     this.status = RecordingStatus.Recording;
@@ -157,6 +163,19 @@ export class CapacitorAudioRecorderWeb extends WebPlugin implements CapacitorAud
     return { status: this.status };
   }
 
+  async getCurrentAmplitude(): Promise<GetCurrentAmplitudeResult> {
+    if (this.status !== RecordingStatus.Recording || !this.analyser || !this.analyserBuffer) {
+      return { value: 0 };
+    }
+    this.analyser.getFloatTimeDomainData(this.analyserBuffer);
+    let sumOfSquares = 0;
+    for (const sample of this.analyserBuffer) {
+      sumOfSquares += sample * sample;
+    }
+    const rms = Math.sqrt(sumOfSquares / this.analyserBuffer.length);
+    return { value: Math.max(0, Math.min(1, rms)) };
+  }
+
   async checkPermissions(): Promise<PermissionStatus> {
     const state = await this.getPermissionState();
     return { recordAudio: state };
@@ -232,6 +251,7 @@ export class CapacitorAudioRecorderWeb extends WebPlugin implements CapacitorAud
     this.pausedTimestamp = null;
     this.accumulatedPauseDuration = 0;
     this.recordedChunks = [];
+    this.teardownAnalyser();
     this.cleanupMediaStream();
     if (this.mediaRecorder) {
       const recorder = this.mediaRecorder;
@@ -240,6 +260,49 @@ export class CapacitorAudioRecorderWeb extends WebPlugin implements CapacitorAud
       recorder.onerror = null;
     }
     this.mediaRecorder = null;
+  }
+
+  private setupAnalyser(): void {
+    if (!this.mediaStream) {
+      return;
+    }
+    try {
+      const AudioContextCtor: typeof AudioContext | undefined =
+        typeof AudioContext !== 'undefined'
+          ? AudioContext
+          : (globalThis as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextCtor) {
+        return;
+      }
+      const context = new AudioContextCtor();
+      const source = context.createMediaStreamSource(this.mediaStream);
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 1024;
+      source.connect(analyser);
+      this.audioContext = context;
+      this.analyser = analyser;
+      this.analyserBuffer = new Float32Array(new ArrayBuffer(analyser.fftSize * Float32Array.BYTES_PER_ELEMENT));
+    } catch {
+      this.teardownAnalyser();
+    }
+  }
+
+  private teardownAnalyser(): void {
+    if (this.analyser) {
+      try {
+        this.analyser.disconnect();
+      } catch {
+        // Ignored.
+      }
+    }
+    this.analyser = null;
+    this.analyserBuffer = null;
+    if (this.audioContext) {
+      void this.audioContext.close().catch(() => {
+        // Ignored.
+      });
+    }
+    this.audioContext = null;
   }
 
   private cleanupMediaStream(): void {
