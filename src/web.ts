@@ -275,11 +275,11 @@ export class CapacitorAudioRecorderWeb extends WebPlugin implements CapacitorAud
         return;
       }
       const context = new AudioContextCtor();
+      this.audioContext = context;
       const source = context.createMediaStreamSource(this.mediaStream);
       const analyser = context.createAnalyser();
       analyser.fftSize = 1024;
       source.connect(analyser);
-      this.audioContext = context;
       this.analyser = analyser;
       this.analyserBuffer = new Float32Array(new ArrayBuffer(analyser.fftSize * Float32Array.BYTES_PER_ELEMENT));
     } catch {

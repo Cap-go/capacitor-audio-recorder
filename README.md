@@ -168,8 +168,10 @@ Retrieve the current input amplitude (microphone level) as a normalized
 number in the `[0, 1]` range.
 
 Intended for driving live visualizations such as VU meters or waveforms
-while recording. Returns `0` when no recording is active. Safe to poll
-at any cadence (~60–100ms is typical for waveforms).
+while recording. Returns `0` when no recording is active. Designed for
+UI-rate polling — a 60–100 ms interval is a good starting point for a
+waveform. Avoid calling it in a tight loop; each call crosses the
+JS/native bridge.
 
 **Returns:** <code>Promise&lt;<a href="#getcurrentamplituderesult">GetCurrentAmplitudeResult</a>&gt;</code>
 
