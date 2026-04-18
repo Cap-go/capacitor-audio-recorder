@@ -156,6 +156,25 @@ public class CapacitorAudioRecorderPlugin extends com.getcapacitor.Plugin {
     }
 
     @PluginMethod
+    public void getCurrentAmplitude(PluginCall call) {
+        JSObject result = new JSObject();
+        if (mediaRecorder == null || status != RecordingStatus.RECORDING) {
+            result.put("value", 0.0);
+            call.resolve(result);
+            return;
+        }
+        double value;
+        try {
+            int peak = mediaRecorder.getMaxAmplitude();
+            value = Math.max(0.0, Math.min(1.0, peak / 32767.0));
+        } catch (IllegalStateException ex) {
+            value = 0.0;
+        }
+        result.put("value", value);
+        call.resolve(result);
+    }
+
+    @PluginMethod
     public void checkPermissions(PluginCall call) {
         PermissionState state = getPermissionState("microphone");
         JSObject result = new JSObject();

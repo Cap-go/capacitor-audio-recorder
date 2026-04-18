@@ -53,6 +53,7 @@ npx cap sync
 * [`stopRecording()`](#stoprecording)
 * [`cancelRecording()`](#cancelrecording)
 * [`getRecordingStatus()`](#getrecordingstatus)
+* [`getCurrentAmplitude()`](#getcurrentamplitude)
 * [`checkPermissions()`](#checkpermissions)
 * [`requestPermissions()`](#requestpermissions)
 * [`addListener('recordingError', ...)`](#addlistenerrecordingerror-)
@@ -153,6 +154,28 @@ Retrieve the current recording status.
 **Returns:** <code>Promise&lt;<a href="#getrecordingstatusresult">GetRecordingStatusResult</a>&gt;</code>
 
 **Since:** 1.0.0
+
+--------------------
+
+
+### getCurrentAmplitude()
+
+```typescript
+getCurrentAmplitude() => Promise<GetCurrentAmplitudeResult>
+```
+
+Retrieve the current input amplitude (microphone level) as a normalized
+number in the `[0, 1]` range.
+
+Intended for driving live visualizations such as VU meters or waveforms
+while recording. Returns `0` when no recording is active. Designed for
+UI-rate polling — a 60–100 ms interval is a good starting point for a
+waveform. Avoid calling it in a tight loop; each call crosses the
+JS/native bridge.
+
+**Returns:** <code>Promise&lt;<a href="#getcurrentamplituderesult">GetCurrentAmplitudeResult</a>&gt;</code>
+
+**Since:** 8.1.0
 
 --------------------
 
@@ -308,6 +331,15 @@ Result returned by {@link CapacitorAudioRecorderPlugin.getRecordingStatus}.
 | Prop         | Type                                                        | Description                   | Since |
 | ------------ | ----------------------------------------------------------- | ----------------------------- | ----- |
 | **`status`** | <code><a href="#recordingstatus">RecordingStatus</a></code> | The current recording status. | 1.0.0 |
+
+
+#### GetCurrentAmplitudeResult
+
+Result returned by {@link CapacitorAudioRecorderPlugin.getCurrentAmplitude}.
+
+| Prop        | Type                | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Since |
+| ----------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| **`value`** | <code>number</code> | The current input amplitude normalized to the `[0, 1]` range, where `0` represents silence and `1` represents the maximum level the platform can report. The value is `0` when no recording is active. Note: the source signal differs between platforms — Android reports the peak sample amplitude since the last call, iOS reports the average power in dB converted to linear, and Web reports the RMS of the latest frame. Consumers that need cross-platform parity may want to apply a per-platform scaling curve. | 8.1.0 |
 
 
 #### PermissionStatus
