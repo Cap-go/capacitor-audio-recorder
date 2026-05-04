@@ -35,6 +35,10 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
     private var pauseStartDate: Date?
     private var accumulatedPauseDuration: TimeInterval = 0
     private var shouldEmitStoppedEvent = true
+    // AVAudioSession interruption observer. Active for the lifetime of a
+    // recording so phone calls / Siri / alarms can pause cleanly without
+    // losing the partially-recorded file.
+    private var interruptionObserver: NSObjectProtocol?
 
     // MARK: - Plugin methods
 
@@ -234,9 +238,87 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         accumulatedPauseDuration = 0
         pauseStartDate = nil
         shouldEmitStoppedEvent = true
+
+        registerInterruptionObserver()
+    }
+
+    private func registerInterruptionObserver() {
+        unregisterInterruptionObserver()
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: audioSession,
+            queue: .main
+        ) { [weak self] notification in
+            self?.handleInterruption(notification: notification)
+        }
+    }
+
+    private func unregisterInterruptionObserver() {
+        if let observer = interruptionObserver {
+            NotificationCenter.default.removeObserver(observer)
+            interruptionObserver = nil
+        }
+    }
+
+    private func handleInterruption(notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: typeValue) else {
+            return
+        }
+
+        switch type {
+        case .began:
+            // iOS is interrupting (call, Siri, alarm, Bluetooth disconnect).
+            // Pause the recorder synchronously inside the notification handler
+            // so AVAudioRecorder finalizes pending writes before the session
+            // is deactivated. Without this, the recorder hits
+            // audioRecorderDidFinishRecording(success: false) and the file
+            // is destroyed.
+            guard let recorder = audioRecorder, status == .recording else { return }
+            recorder.pause()
+            pauseStartDate = Date()
+            status = .paused
+            notifyListeners("recordingInterruptionBegan", data: [:])
+
+        case .ended:
+            // Interruption ended. iOS hints whether we should resume via the
+            // shouldResume option. If yes, re-activate the session and record;
+            // if no, stay paused and let the user resume manually.
+            guard let recorder = audioRecorder, status == .paused else {
+                notifyListeners("recordingInterruptionEnded", data: ["shouldResume": false])
+                return
+            }
+            let shouldResume: Bool = {
+                guard let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt else {
+                    return false
+                }
+                let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
+                return options.contains(.shouldResume)
+            }()
+
+            if shouldResume {
+                do {
+                    try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+                    if let pauseStart = pauseStartDate {
+                        accumulatedPauseDuration += Date().timeIntervalSince(pauseStart)
+                    }
+                    recorder.record()
+                    status = .recording
+                    pauseStartDate = nil
+                } catch {
+                    CAPLog.print("CapacitorAudioRecorderPlugin", "Failed to resume after interruption: \(error.localizedDescription)")
+                }
+            }
+            notifyListeners("recordingInterruptionEnded", data: ["shouldResume": shouldResume])
+
+        @unknown default:
+            return
+        }
     }
 
     private func resetRecorder(deleteFile: Bool) {
+        unregisterInterruptionObserver()
         if deleteFile, let url = currentFileURL {
             try? FileManager.default.removeItem(at: url)
         }
