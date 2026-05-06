@@ -43,6 +43,22 @@ npm install @capgo/capacitor-audio-recorder
 npx cap sync
 ```
 
+## Background recording
+
+The plugin does not automatically put your app into a background-safe mode — you need to configure each platform so the process is allowed to keep running while the screen is locked.
+
+- **iOS**: Enable the *Background Modes → Audio* capability in Xcode (or add `UIBackgroundModes` with an `audio` entry in `Info.plist`). With that flag enabled, `startRecording` will continue while the device is locked because the plugin already uses an `AVAudioSession` category that supports background capture.
+- **Android**: Recording continues as long as the app process stays alive. For hour-long sessions you should move the recording work into a foreground service with an ongoing notification to prevent the OS from stopping the process. Add the required permissions, e.g.:
+
+  ```xml
+  <!-- android/app/src/main/AndroidManifest.xml -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+  ```
+
+  Then start a foreground service before calling `startRecording` (or trigger the recording inside that service). The plugin itself does not create the service for you, so you can use your preferred foreground-service implementation or a background-task helper plugin to start/stop it alongside the recording UI.
+
 ## API
 
 <docgen-index>
