@@ -1,3 +1,4 @@
+import { CapacitorUpdater } from '@capgo/capacitor-updater';
 import './style.css';
 import {
   CapacitorAudioRecorder,
@@ -260,3 +261,9 @@ function applyStopResult(result) {
     showMessage(error?.message ?? String(error));
   }
 })();
+
+if (Capacitor.isNativePlatform()) {
+  CapacitorUpdater.notifyAppReady().catch((error) => {
+    console.error('Capgo notifyAppReady failed', error);
+  });
+}
