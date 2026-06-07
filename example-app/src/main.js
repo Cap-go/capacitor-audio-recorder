@@ -1,9 +1,6 @@
 import { CapacitorUpdater } from '@capgo/capacitor-updater';
 import './style.css';
-import {
-  CapacitorAudioRecorder,
-  RecordingStatus,
-} from '@capgo/capacitor-audio-recorder';
+import { CapacitorAudioRecorder, RecordingStatus } from '@capgo/capacitor-audio-recorder';
 import { Filesystem } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
 
@@ -36,7 +33,8 @@ function showMessage(text) {
 
 function updateStatus(status) {
   statusLabel.textContent = status;
-  startButton.disabled = status === RecordingStatus.Recording || status === RecordingStatus.Paused || !isSupported;
+  startButton.disabled =
+    status === RecordingStatus.Recording || status === RecordingStatus.Paused || !isSupported;
   pauseButton.disabled = status !== RecordingStatus.Recording;
   resumeButton.disabled = status !== RecordingStatus.Paused;
   stopButton.disabled = status === RecordingStatus.Inactive;
@@ -125,7 +123,7 @@ readFileButton.addEventListener('click', async () => {
 
   try {
     showMessage('Reading file...');
-    
+
     // Convert file:// URI to a path that Filesystem API can use
     // On iOS: file:///var/mobile/... -> /var/mobile/...
     // On Android: file:///data/data/... -> /data/data/...
@@ -183,7 +181,7 @@ readFileFetchButton.addEventListener('click', async () => {
 
     // Fetch the file
     const response = await fetch(fetchableUrl);
-    
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
