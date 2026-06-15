@@ -11,6 +11,8 @@ apply from: "../capacitor-cordova-android-plugins/cordova.variables.gradle"
 dependencies {
     implementation project(':capacitor-filesystem')
     implementation project(':capgo-capacitor-audio-recorder')
+    implementation project(':capgo-capacitor-updater')
+    implementation project(':capacitor-splash-screen')
 
 }
 
