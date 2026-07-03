@@ -4,7 +4,7 @@ import pkg from './package.json';
 
 const config: CapacitorConfig = {
   appId: 'app.capgo.audiorecorder',
-  appName: 'Audio Recorder Example',
+  appName: '@capgo/capacitor-audio-recorder',
   webDir: 'dist',
   plugins: {
     SplashScreen: {
