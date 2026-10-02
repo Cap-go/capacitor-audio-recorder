@@ -71,6 +71,18 @@ export interface StartRecordingOptions {
    * @since 1.0.0
    */
   sampleRate?: number;
+
+  /**
+   * When `true`, reset the iOS `AVAudioSession` category to `.playback` when
+   * recording stops or is canceled. This avoids quiet in-app playback of the
+   * just-recorded file while the session is still configured for
+   * `.playAndRecord`.
+   *
+   * Only available on iOS.
+   *
+   * @since 8.2.10
+   */
+  resetToPlaybackOnStop?: boolean;
 }
 
 /**
@@ -228,6 +240,15 @@ export interface CapacitorAudioRecorderPlugin {
    * @since 1.0.0
    */
   cancelRecording(): Promise<void>;
+
+  /**
+   * Reset the iOS audio session to `.playback` for normal-volume playback of
+   * recorded audio in the same app process (for example via an HTML audio
+   * element). No-op on Android and Web.
+   *
+   * @since 8.2.10
+   */
+  resetAudioSessionForPlayback(): Promise<void>;
 
   /**
    * Retrieve the current recording status.

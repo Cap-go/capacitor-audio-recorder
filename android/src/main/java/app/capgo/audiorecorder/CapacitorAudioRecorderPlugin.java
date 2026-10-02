@@ -137,6 +137,11 @@ public class CapacitorAudioRecorderPlugin extends com.getcapacitor.Plugin {
     }
 
     @PluginMethod
+    public void resetAudioSessionForPlayback(PluginCall call) {
+        call.resolve();
+    }
+
+    @PluginMethod
     public void cancelRecording(PluginCall call) {
         if (mediaRecorder != null) {
             try {

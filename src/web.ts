@@ -159,6 +159,10 @@ export class CapacitorAudioRecorderWeb extends WebPlugin implements CapacitorAud
     this.resetState();
   }
 
+  async resetAudioSessionForPlayback(): Promise<void> {
+    // iOS-only; Web audio routing does not use AVAudioSession.
+  }
+
   async getRecordingStatus(): Promise<{ status: RecordingStatus }> {
     return { status: this.status };
   }
