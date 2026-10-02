@@ -31,8 +31,8 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
     private var audioRecorder: AVAudioRecorder?
     private var currentFileURL: URL?
     private var status: RecordingStatus = .inactive
-    private var recordingStartDate: Date?
-    private var pauseStartDate: Date?
+    private var recordingStartUptime: TimeInterval?
+    private var pauseStartUptime: TimeInterval?
     private var accumulatedPauseDuration: TimeInterval = 0
     private var shouldEmitStoppedEvent = true
     // AVAudioSession interruption observer. Active for the lifetime of a
@@ -72,7 +72,7 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         }
 
         recorder.pause()
-        pauseStartDate = Date()
+        pauseStartUptime = monotonicUptime()
         status = .paused
         notifyListeners("recordingPaused", data: [:])
         call.resolve()
@@ -98,17 +98,17 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
             return
         }
 
-        if let pauseStartDate {
-            accumulatedPauseDuration += Date().timeIntervalSince(pauseStartDate)
-        }
         let didStart = recorder.record()
         if !didStart {
             CAPLog.print("CapacitorAudioRecorderPlugin", "AVAudioRecorder.record() returned false on resume")
             call.reject("Failed to resume recording.")
             return
         }
+        if let pauseStartUptime {
+            accumulatedPauseDuration += monotonicUptime() - pauseStartUptime
+        }
         status = .recording
-        pauseStartDate = nil
+        pauseStartUptime = nil
         call.resolve()
     }
 
@@ -136,8 +136,7 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         }
 
         shouldEmitStoppedEvent = false
-        // currentTime is only valid while recording; read it before stop().
-        let durationMilliseconds = recorder.currentTime * 1000
+        let durationMilliseconds = recordingDurationMilliseconds()
         recorder.stop()
         deactivateSessionIfNeeded()
 
@@ -211,7 +210,7 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         }
 
         if flag {
-            let durationMilliseconds = recordingDurationMillisecondsFromWallClock()
+            let durationMilliseconds = recordingDurationMilliseconds()
             let uri = currentFileURL?.absoluteString ?? ""
             let result: [String: Any] = [
                 "duration": durationMilliseconds,
@@ -235,8 +234,8 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
             self.audioRecorder = nil
             // intentionally NOT clearing currentFileURL — it's the recovery breadcrumb
             status = .inactive
-            recordingStartDate = nil
-            pauseStartDate = nil
+            recordingStartUptime = nil
+            pauseStartUptime = nil
             accumulatedPauseDuration = 0
         }
     }
@@ -288,9 +287,9 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         audioRecorder = recorder
         currentFileURL = fileURL
         status = .recording
-        recordingStartDate = Date()
+        recordingStartUptime = monotonicUptime()
         accumulatedPauseDuration = 0
-        pauseStartDate = nil
+        pauseStartUptime = nil
         shouldEmitStoppedEvent = true
 
         registerInterruptionObserver()
@@ -331,7 +330,7 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
             // is destroyed.
             guard let recorder = audioRecorder, status == .recording else { return }
             recorder.pause()
-            pauseStartDate = Date()
+            pauseStartUptime = monotonicUptime()
             status = .paused
             notifyListeners("recordingInterruptionBegan", data: [:])
 
@@ -354,12 +353,12 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
             if shouldResume {
                 do {
                     try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
-                    if let pauseStart = pauseStartDate {
-                        accumulatedPauseDuration += Date().timeIntervalSince(pauseStart)
+                    if let pauseStart = pauseStartUptime {
+                        accumulatedPauseDuration += monotonicUptime() - pauseStart
                     }
                     recorder.record()
                     status = .recording
-                    pauseStartDate = nil
+                    pauseStartUptime = nil
                 } catch {
                     CAPLog.print("CapacitorAudioRecorderPlugin", "Failed to resume after interruption: \(error.localizedDescription)")
                 }
@@ -371,16 +370,20 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         }
     }
 
-    /// Elapsed recording time in milliseconds from start/pause tracking (Android-aligned).
-    private func recordingDurationMillisecondsFromWallClock() -> Double {
-        guard let start = recordingStartDate else {
+    private func monotonicUptime() -> TimeInterval {
+        ProcessInfo.processInfo.systemUptime
+    }
+
+    /// Elapsed recording time in milliseconds from monotonic start/pause tracking (Android-aligned).
+    private func recordingDurationMilliseconds() -> Double {
+        guard let start = recordingStartUptime else {
             return 0
         }
         var pauseTotal = accumulatedPauseDuration
-        if let pauseStart = pauseStartDate {
-            pauseTotal += Date().timeIntervalSince(pauseStart)
+        if let pauseStart = pauseStartUptime {
+            pauseTotal += monotonicUptime() - pauseStart
         }
-        let seconds = Date().timeIntervalSince(start) - pauseTotal
+        let seconds = monotonicUptime() - start - pauseTotal
         return max(0, seconds) * 1000
     }
 
@@ -392,8 +395,8 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         audioRecorder = nil
         currentFileURL = nil
         status = .inactive
-        recordingStartDate = nil
-        pauseStartDate = nil
+        recordingStartUptime = nil
+        pauseStartUptime = nil
         accumulatedPauseDuration = 0
     }
 
