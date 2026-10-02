@@ -82,6 +82,7 @@ The plugin does not automatically put your app into a background-safe mode — y
 * [`resumeRecording()`](#resumerecording)
 * [`stopRecording()`](#stoprecording)
 * [`cancelRecording()`](#cancelrecording)
+* [`resetAudioSessionForPlayback()`](#resetaudiosessionforplayback)
 * [`getRecordingStatus()`](#getrecordingstatus)
 * [`getCurrentAmplitude()`](#getcurrentamplitude)
 * [`checkPermissions()`](#checkpermissions)
@@ -169,6 +170,21 @@ cancelRecording() => Promise<void>
 Cancel the current recording and discard any captured audio.
 
 **Since:** 1.0.0
+
+--------------------
+
+
+### resetAudioSessionForPlayback()
+
+```typescript
+resetAudioSessionForPlayback() => Promise<void>
+```
+
+Reset the iOS audio session to `.playback` for normal-volume playback of
+recorded audio in the same app process (for example via an HTML audio
+element). No-op on Android and Web.
+
+**Since:** 8.2.10
 
 --------------------
 
@@ -335,12 +351,13 @@ Get the native Capacitor plugin version.
 
 Options accepted by {@link CapacitorAudioRecorderPlugin.startRecording}.
 
-| Prop                              | Type                                                          | Description                                                                | Since |
-| --------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------- | ----- |
-| **`audioSessionCategoryOptions`** | <code>AudioSessionCategoryOption[]</code>                     | The audio session category options for recording. Only available on iOS.   | 1.0.0 |
-| **`audioSessionMode`**            | <code><a href="#audiosessionmode">AudioSessionMode</a></code> | The audio session mode for recording. Only available on iOS.               | 1.0.0 |
-| **`bitRate`**                     | <code>number</code>                                           | The audio bit rate in bytes per second. Only available on Android and iOS. | 1.0.0 |
-| **`sampleRate`**                  | <code>number</code>                                           | The audio sample rate in Hz. Only available on Android and iOS.            | 1.0.0 |
+| Prop                              | Type                                                          | Description                                                                                                                                                                                                                                             | Since  |
+| --------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| **`audioSessionCategoryOptions`** | <code>AudioSessionCategoryOption[]</code>                     | The audio session category options for recording. Only available on iOS.                                                                                                                                                                                | 1.0.0  |
+| **`audioSessionMode`**            | <code><a href="#audiosessionmode">AudioSessionMode</a></code> | The audio session mode for recording. Only available on iOS.                                                                                                                                                                                            | 1.0.0  |
+| **`bitRate`**                     | <code>number</code>                                           | The audio bit rate in bytes per second. Only available on Android and iOS.                                                                                                                                                                              | 1.0.0  |
+| **`sampleRate`**                  | <code>number</code>                                           | The audio sample rate in Hz. Only available on Android and iOS.                                                                                                                                                                                         | 1.0.0  |
+| **`resetToPlaybackOnStop`**       | <code>boolean</code>                                          | When `true`, reset the iOS `AVAudioSession` category to `.playback` when recording stops or is canceled. This avoids quiet in-app playback of the just-recorded file while the session is still configured for `.playAndRecord`. Only available on iOS. | 8.2.10 |
 
 
 #### StopRecordingResult
