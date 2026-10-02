@@ -136,10 +136,11 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         }
 
         shouldEmitStoppedEvent = false
+        // currentTime is only valid while recording; read it before stop().
+        let durationMilliseconds = recorder.currentTime * 1000
         recorder.stop()
         deactivateSessionIfNeeded()
 
-        let durationMilliseconds = recorder.currentTime * 1000
         let uri = currentFileURL?.absoluteString ?? ""
 
         let result: [String: Any] = [
@@ -210,7 +211,7 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         }
 
         if flag {
-            let durationMilliseconds = recorder.currentTime * 1000
+            let durationMilliseconds = recordingDurationMillisecondsFromWallClock()
             let uri = currentFileURL?.absoluteString ?? ""
             let result: [String: Any] = [
                 "duration": durationMilliseconds,
@@ -368,6 +369,19 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         @unknown default:
             return
         }
+    }
+
+    /// Elapsed recording time in milliseconds from start/pause tracking (Android-aligned).
+    private func recordingDurationMillisecondsFromWallClock() -> Double {
+        guard let start = recordingStartDate else {
+            return 0
+        }
+        var pauseTotal = accumulatedPauseDuration
+        if let pauseStart = pauseStartDate {
+            pauseTotal += Date().timeIntervalSince(pauseStart)
+        }
+        let seconds = Date().timeIntervalSince(start) - pauseTotal
+        return max(0, seconds) * 1000
     }
 
     private func resetRecorder(deleteFile: Bool) {
