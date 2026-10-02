@@ -353,12 +353,16 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
             if shouldResume {
                 do {
                     try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
-                    if let pauseStart = pauseStartUptime {
-                        accumulatedPauseDuration += monotonicUptime() - pauseStart
+                    let didStart = recorder.record()
+                    if didStart {
+                        if let pauseStart = pauseStartUptime {
+                            accumulatedPauseDuration += monotonicUptime() - pauseStart
+                        }
+                        status = .recording
+                        pauseStartUptime = nil
+                    } else {
+                        CAPLog.print("CapacitorAudioRecorderPlugin", "AVAudioRecorder.record() returned false after interruption")
                     }
-                    recorder.record()
-                    status = .recording
-                    pauseStartUptime = nil
                 } catch {
                     CAPLog.print("CapacitorAudioRecorderPlugin", "Failed to resume after interruption: \(error.localizedDescription)")
                 }
