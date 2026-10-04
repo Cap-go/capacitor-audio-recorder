@@ -127,7 +127,12 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
             ]
             currentFileURL = nil
             unregisterInterruptionObserver()
-            deactivateSessionIfNeeded()
+            do {
+                try deactivateSessionIfNeeded()
+            } catch {
+                call.reject("Failed to reset audio session for playback.", nil, error)
+                return
+            }
             notifyListeners("recordingStopped", data: result)
             call.resolve(result)
             return
@@ -141,7 +146,12 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         shouldEmitStoppedEvent = false
         let durationMilliseconds = recordingDurationMilliseconds()
         recorder.stop()
-        deactivateSessionIfNeeded()
+        do {
+            try deactivateSessionIfNeeded()
+        } catch {
+            call.reject("Failed to reset audio session for playback.", nil, error)
+            return
+        }
 
         let uri = currentFileURL?.absoluteString ?? ""
 
@@ -172,7 +182,14 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
 
     @objc func cancelRecording(_ call: CAPPluginCall) {
         guard audioRecorder != nil else {
-            deactivateSessionIfNeeded()
+            if currentFileURL != nil {
+                do {
+                    try deactivateSessionIfNeeded()
+                } catch {
+                    call.reject("Failed to reset audio session for playback.", nil, error)
+                    return
+                }
+            }
             resetRecorder(deleteFile: true)
             call.resolve()
             return
@@ -180,7 +197,12 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
 
         shouldEmitStoppedEvent = false
         audioRecorder?.stop()
-        deactivateSessionIfNeeded()
+        do {
+            try deactivateSessionIfNeeded()
+        } catch {
+            call.reject("Failed to reset audio session for playback.", nil, error)
+            return
+        }
         resetRecorder(deleteFile: true)
         call.resolve()
     }
@@ -431,12 +453,14 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         try audioSession.setCategory(.playback, mode: .default, options: [])
     }
 
-    private func deactivateSessionIfNeeded() {
+    private func deactivateSessionIfNeeded() throws {
+        var playbackResetError: Error?
         if resetToPlaybackOnStop {
             do {
                 try applyPlaybackAudioSessionCategory()
                 resetToPlaybackOnStop = false
             } catch {
+                playbackResetError = error
                 CAPLog.print("CapacitorAudioRecorderPlugin", "Failed to set playback audio session category: \(error.localizedDescription)")
             }
         }
@@ -444,6 +468,9 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
             try audioSession.setActive(false, options: .notifyOthersOnDeactivation)
         } catch {
             CAPLog.print("CapacitorAudioRecorderPlugin", "Failed to deactivate audio session: \(error.localizedDescription)")
+        }
+        if let playbackResetError {
+            throw playbackResetError
         }
     }
 
