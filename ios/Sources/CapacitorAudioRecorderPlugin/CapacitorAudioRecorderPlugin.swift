@@ -125,7 +125,6 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
                 "duration": 0,
                 "uri": url.absoluteString
             ]
-            currentFileURL = nil
             unregisterInterruptionObserver()
             do {
                 try deactivateSessionIfNeeded()
@@ -135,6 +134,7 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
             }
             notifyListeners("recordingStopped", data: result)
             call.resolve(result)
+            resetRecorder(deleteFile: false)
             return
         }
 
@@ -149,6 +149,7 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         do {
             try deactivateSessionIfNeeded()
         } catch {
+            resetRecorder(deleteFile: false)
             call.reject("Failed to reset audio session for playback.", nil, error)
             return
         }
@@ -200,6 +201,7 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         do {
             try deactivateSessionIfNeeded()
         } catch {
+            resetRecorder(deleteFile: true)
             call.reject("Failed to reset audio session for playback.", nil, error)
             return
         }
