@@ -12,7 +12,6 @@ struct RecordingInterruptionSession {
     enum RecorderFinishOutcome: Equatable {
         case ignoreBecauseStopWasRequested
         case preserveSegmentAndStayPaused
-        case emitStoppedAndReset
         case failedPreservePartial
     }
 
@@ -66,10 +65,6 @@ struct RecordingInterruptionSession {
         status = .recording
     }
 
-    mutating func markAutoResumeReported(didResume: Bool) -> InterruptionEndedResult {
-        InterruptionEndedResult(shouldAttemptAutoResume: false, reportedShouldResume: didResume)
-    }
-
     mutating func handleRecorderDidFinish(
         successfully: Bool,
         stopRequestedByPlugin: Bool,
@@ -118,18 +113,11 @@ struct RecordingInterruptionSession {
 
     // MARK: - Private
 
-    /// Legacy behavior (8.2.9): system success finish was treated like a normal stop.
     private mutating func applySuccessfulSystemFinish(activeSegmentIDAtFinish: String?) -> RecorderFinishOutcome {
-        emitStoppedAndReset(activeSegmentIDAtFinish: activeSegmentIDAtFinish)
-        return .emitStoppedAndReset
-    }
-
-    private mutating func emitStoppedAndReset(activeSegmentIDAtFinish: String?) {
-        _ = activeSegmentIDAtFinish
-        status = .inactive
-        completedSegmentIDs = []
-        activeSegmentID = nil
+        archiveActiveSegment(activeSegmentIDAtFinish: activeSegmentIDAtFinish)
         hasActiveRecorder = false
+        status = .paused
+        return .preserveSegmentAndStayPaused
     }
 
     private mutating func archiveActiveSegment(activeSegmentIDAtFinish: String?) {
