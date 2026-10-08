@@ -4,7 +4,9 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
+import android.media.MediaRecorder;
 import com.getcapacitor.PluginCall;
 import java.io.File;
 import java.lang.reflect.Field;
@@ -61,8 +63,41 @@ public class CapacitorAudioRecorderPluginTest {
         assertNull(getOutputFile(plugin));
     }
 
+    @Test
+    public void cancelRecording_withMediaRecorder_stopsResetsAndReleases() throws Exception {
+        CapacitorAudioRecorderPlugin plugin = new CapacitorAudioRecorderPlugin();
+        MediaRecorder recorder = mock(MediaRecorder.class);
+        File tempFile = File.createTempFile("recording-", ".m4a");
+        assertTrue(tempFile.exists());
+
+        setMediaRecorder(plugin, recorder);
+        setOutputFile(plugin, tempFile);
+        setStatus(plugin, "RECORDING");
+
+        plugin.cancelRecording(mock(PluginCall.class));
+
+        verify(recorder).stop();
+        verify(recorder).reset();
+        verify(recorder).release();
+        assertFalse(tempFile.exists());
+        assertNull(getOutputFile(plugin));
+        assertNull(getMediaRecorder(plugin));
+    }
+
     private static void invokeCancelRecording(CapacitorAudioRecorderPlugin plugin, PluginCall call) throws Exception {
         plugin.cancelRecording(call);
+    }
+
+    private static void setMediaRecorder(CapacitorAudioRecorderPlugin plugin, MediaRecorder recorder) throws Exception {
+        Field field = CapacitorAudioRecorderPlugin.class.getDeclaredField("mediaRecorder");
+        field.setAccessible(true);
+        field.set(plugin, recorder);
+    }
+
+    private static MediaRecorder getMediaRecorder(CapacitorAudioRecorderPlugin plugin) throws Exception {
+        Field field = CapacitorAudioRecorderPlugin.class.getDeclaredField("mediaRecorder");
+        field.setAccessible(true);
+        return (MediaRecorder) field.get(plugin);
     }
 
     private static void setOutputFile(CapacitorAudioRecorderPlugin plugin, File file) throws Exception {
