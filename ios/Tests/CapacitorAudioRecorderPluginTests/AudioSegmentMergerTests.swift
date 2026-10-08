@@ -1,4 +1,5 @@
 import AVFoundation
+import Darwin
 import XCTest
 @testable import CapacitorAudioRecorderPlugin
 
@@ -46,9 +47,13 @@ final class AudioSegmentMergerTests: XCTestCase {
             AVNumberOfChannelsKey: 1,
             AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
         ]
-        let recorder = try AVAudioRecorder(url: url, settings: settings)
-        recorder.prepareToRecord()
-        XCTAssertTrue(recorder.record(forDuration: durationSeconds))
-        recorder.stop()
+        let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)!
+        let frames = AVAudioFrameCount(durationSeconds * 44_100)
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames)!
+        buffer.frameLength = frames
+        memset(buffer.mutableAudioBufferList.pointee.mBuffers.mData, 0,
+               Int(buffer.mutableAudioBufferList.pointee.mBuffers.mDataByteSize))
+        let file = try AVAudioFile(forWriting: url, settings: settings)
+        try file.write(from: buffer)
     }
 }

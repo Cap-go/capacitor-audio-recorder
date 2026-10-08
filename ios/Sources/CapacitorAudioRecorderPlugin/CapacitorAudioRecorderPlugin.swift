@@ -598,6 +598,7 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         if workingSegments.count == 1 {
             let url = workingSegments[0]
             let duration = AudioSegmentMerger.durationMilliseconds(for: url)
+            deleteRecordingFiles(at: segments.filter { $0 != url })
             return (url, duration)
         }
 

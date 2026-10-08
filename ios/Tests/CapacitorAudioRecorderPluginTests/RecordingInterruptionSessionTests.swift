@@ -2,9 +2,8 @@ import XCTest
 @testable import CapacitorAudioRecorderPlugin
 
 final class RecordingInterruptionSessionTests: XCTestCase {
-    /// Simulates: record -> incoming call (interruption began) -> call ends with
-    /// shouldResume -> plugin auto-resumes on a new segment -> system finalizes the
-    /// old recorder after the new segment already started.
+    /// Simulates: record -> incoming call -> auto-resume stops segment 1, archives it,
+    /// then starts segment 2 on a new file.
     func testInterruptionAutoResumeThenSystemFinish_preservesAudioAndPausedState() {
         var session = RecordingInterruptionSession()
         session.markRecordingStarted(segmentID: "segment-1.m4a")
@@ -15,19 +14,22 @@ final class RecordingInterruptionSessionTests: XCTestCase {
 
         let ended = session.handleInterruptionEnded(shouldResumeHint: true)
         XCTAssertTrue(ended.shouldAttemptAutoResume)
-        session.markNewSegmentStarted(segmentID: "segment-2.m4a")
-        session.markAutoResumeSucceeded()
-        XCTAssertEqual(session.status, .recording)
 
         let outcome = session.handleRecorderDidFinish(
             successfully: true,
             stopRequestedByPlugin: false,
-            activeSegmentIDAtFinish: "segment-1.m4a"
+            activeSegmentIDAtFinish: "segment-1.m4a",
+            continuingWithAutoResume: true
         )
-
-        XCTAssertEqual(outcome, .preserveSegmentAndStayPaused)
-        XCTAssertEqual(session.status, .paused)
+        XCTAssertEqual(outcome, .preserveSegmentAndContinueAutoResume)
         XCTAssertEqual(session.completedSegmentIDs, ["segment-1.m4a"])
+        XCTAssertNil(session.activeSegmentID)
+        XCTAssertFalse(session.hasActiveRecorder)
+        XCTAssertEqual(session.status, .paused)
+
+        session.markNewSegmentStarted(segmentID: "segment-2.m4a")
+        session.markAutoResumeSucceeded()
+        XCTAssertEqual(session.status, .recording)
         XCTAssertEqual(session.activeSegmentID, "segment-2.m4a")
         XCTAssertTrue(session.hasActiveRecorder)
         XCTAssertTrue(session.canResumeRecording)
