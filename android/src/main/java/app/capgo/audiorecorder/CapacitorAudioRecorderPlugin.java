@@ -138,12 +138,16 @@ public class CapacitorAudioRecorderPlugin extends com.getcapacitor.Plugin {
 
     @PluginMethod
     public void cancelRecording(PluginCall call) {
+        boolean discardRecording = status != RecordingStatus.INACTIVE;
         if (mediaRecorder != null) {
             try {
                 mediaRecorder.stop();
             } catch (RuntimeException ignored) {}
+            discardRecording = true;
         }
-        deleteOutputFile();
+        if (discardRecording) {
+            deleteOutputFile();
+        }
         releaseRecorder();
         call.resolve();
     }
@@ -259,6 +263,7 @@ public class CapacitorAudioRecorderPlugin extends com.getcapacitor.Plugin {
             mediaRecorder.release();
         }
         mediaRecorder = null;
+        outputFile = null;
         status = RecordingStatus.INACTIVE;
         recordingStartTime = 0;
         pauseStartTime = 0;
