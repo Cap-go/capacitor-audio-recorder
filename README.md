@@ -1,13 +1,28 @@
 # @capgo/capacitor-audio-recorder
-<a href="https://capgo.app/"><img src="https://capgo.app/readme-banner.svg?repo=Cap-go/capacitor-audio-recorder" alt="Capgo - Instant updates for Capacitor" /></a>
+
+Record audio from the microphone on iOS, Android and the web with one Capacitor API. Pause, resume, read the input level and save the clip when you are done.
+
+<a href="https://capgo.app/?ref=plugin_audio_recorder"><img src="https://capgo.app/readme-banner.svg?repo=Cap-go/capacitor-audio-recorder" alt="Capgo - Instant updates for Capacitor" /></a>
 
 <div align="center">
-  <h2><a href="https://capgo.app/?ref=plugin_audio_recorder"> ➡️ Get Instant updates for your App with Capgo</a></h2>
-  <h2><a href="https://capgo.app/consulting/?ref=plugin_audio_recorder"> Missing a feature? We’ll build the plugin for you 💪</a></h2>
+  <p><b>Capgo</b>: push fixes to your Capacitor users in minutes, build signed iOS and Android apps without a Mac, and roll back in one click.</p>
+  <h2><a href="https://capgo.app/register/?ref=plugin_audio_recorder">➡️ Get started for free</a></h2>
+  <p>14-day unlimited free trial. No credit card required</p>
+  <p><a href="https://capgo.app/consulting/?ref=plugin_audio_recorder">Missing a feature? We'll build the plugin for you 💪</a></p>
 </div>
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Cap-go/capacitor-audio-recorder/main/assets/github-social-preview.png" alt="@capgo/capacitor-audio-recorder for Capacitor apps" width="300" />
+</p>
 
-Capture audio clips across iOS, Android, and the Web with a consistent Capacitor API.
+## Key features
+
+- **Record**: `startRecording()`, `stopRecording()` and `cancelRecording()` to capture or discard a clip.
+- **Pause and resume**: `pauseRecording()` and `resumeRecording()` without starting a new file.
+- **Input level**: `getCurrentAmplitude()` returns the microphone level from 0 to 1 for meters and waveforms.
+- **Status and events**: `getRecordingStatus()` plus `recordingPaused`, `recordingStopped` and `recordingError` listeners.
+- **Permissions**: `checkPermissions()` and `requestPermissions()` for microphone access.
+- **Platforms**: iOS, Android and Web. iOS uses AVFoundation, Android uses `MediaRecorder`, and web uses the browser recorder.
 
 ## Why Capacitor Audio Recorder?
 
@@ -59,7 +74,7 @@ npx cap sync
 
 ## Background recording
 
-The plugin does not automatically put your app into a background-safe mode — you need to configure each platform so the process is allowed to keep running while the screen is locked.
+The plugin does not automatically put your app into a background-safe mode, you need to configure each platform so the process is allowed to keep running while the screen is locked.
 
 - **iOS**: Enable the *Background Modes → Audio* capability in Xcode (or add `UIBackgroundModes` with an `audio` entry in `Info.plist`). With that flag enabled, `startRecording` will continue while the device is locked because the plugin already uses an `AVAudioSession` category that supports background capture.
 - **Android**: Recording continues as long as the app process stays alive. For hour-long sessions you should move the recording work into a foreground service with an ongoing notification to prevent the OS from stopping the process. Add the required permissions, e.g.:
@@ -82,6 +97,7 @@ The plugin does not automatically put your app into a background-safe mode — y
 * [`resumeRecording()`](#resumerecording)
 * [`stopRecording()`](#stoprecording)
 * [`cancelRecording()`](#cancelrecording)
+* [`resetAudioSessionForPlayback()`](#resetaudiosessionforplayback)
 * [`getRecordingStatus()`](#getrecordingstatus)
 * [`getCurrentAmplitude()`](#getcurrentamplitude)
 * [`checkPermissions()`](#checkpermissions)
@@ -169,6 +185,21 @@ cancelRecording() => Promise<void>
 Cancel the current recording and discard any captured audio.
 
 **Since:** 1.0.0
+
+--------------------
+
+
+### resetAudioSessionForPlayback()
+
+```typescript
+resetAudioSessionForPlayback() => Promise<void>
+```
+
+Reset the iOS audio session to `.playback` for normal-volume playback of
+recorded audio in the same app process (for example via an HTML audio
+element). No-op on Android and Web.
+
+**Since:** 8.2.10
 
 --------------------
 
@@ -335,12 +366,13 @@ Get the native Capacitor plugin version.
 
 Options accepted by {@link CapacitorAudioRecorderPlugin.startRecording}.
 
-| Prop                              | Type                                                          | Description                                                                | Since |
-| --------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------- | ----- |
-| **`audioSessionCategoryOptions`** | <code>AudioSessionCategoryOption[]</code>                     | The audio session category options for recording. Only available on iOS.   | 1.0.0 |
-| **`audioSessionMode`**            | <code><a href="#audiosessionmode">AudioSessionMode</a></code> | The audio session mode for recording. Only available on iOS.               | 1.0.0 |
-| **`bitRate`**                     | <code>number</code>                                           | The audio bit rate in bytes per second. Only available on Android and iOS. | 1.0.0 |
-| **`sampleRate`**                  | <code>number</code>                                           | The audio sample rate in Hz. Only available on Android and iOS.            | 1.0.0 |
+| Prop                              | Type                                                          | Description                                                                                                                                                                                                                                             | Since  |
+| --------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| **`audioSessionCategoryOptions`** | <code>AudioSessionCategoryOption[]</code>                     | The audio session category options for recording. Only available on iOS.                                                                                                                                                                                | 1.0.0  |
+| **`audioSessionMode`**            | <code><a href="#audiosessionmode">AudioSessionMode</a></code> | The audio session mode for recording. Only available on iOS.                                                                                                                                                                                            | 1.0.0  |
+| **`bitRate`**                     | <code>number</code>                                           | The audio bit rate in bytes per second. Only available on Android and iOS.                                                                                                                                                                              | 1.0.0  |
+| **`sampleRate`**                  | <code>number</code>                                           | The audio sample rate in Hz. Only available on Android and iOS.                                                                                                                                                                                         | 1.0.0  |
+| **`resetToPlaybackOnStop`**       | <code>boolean</code>                                          | When `true`, reset the iOS `AVAudioSession` category to `.playback` when recording stops or is canceled. This avoids quiet in-app playback of the just-recorded file while the session is still configured for `.playAndRecord`. Only available on iOS. | 8.2.10 |
 
 
 #### StopRecordingResult
