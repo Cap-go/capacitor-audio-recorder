@@ -13,12 +13,20 @@ struct RecordingInterruptionSession {
         case ignoreBecauseStopWasRequested
         case preserveSegmentAndStayPaused
         case failedPreservePartial
+        case preserveSegmentAndContinueAutoResume
+    }
+
+    enum InterruptionBeganOutcome: Equatable {
+        case pausedActiveRecorder
+        case archivedBecauseRecorderAlreadyStopped
+        case ignored
     }
 
     private(set) var status: Status = .inactive
     private(set) var completedSegmentIDs: [String] = []
     var activeSegmentID: String?
     private(set) var hasActiveRecorder: Bool = false
+    private(set) var pausedByInterruption: Bool = false
 
     var canResumeRecording: Bool {
         status == .paused && (!completedSegmentIDs.isEmpty || activeSegmentID != nil)
@@ -33,14 +41,21 @@ struct RecordingInterruptionSession {
         activeSegmentID = segmentID
         hasActiveRecorder = true
         completedSegmentIDs = []
+        pausedByInterruption = false
     }
 
-    mutating func handleInterruptionBegan() -> Bool {
+    mutating func handleInterruptionBegan(recorderIsRecording: Bool) -> InterruptionBeganOutcome {
         guard hasActiveRecorder, status == .recording else {
-            return false
+            return .ignored
         }
+        pausedByInterruption = true
         status = .paused
-        return true
+        if recorderIsRecording {
+            return .pausedActiveRecorder
+        }
+        archiveActiveSegment(activeSegmentIDAtFinish: activeSegmentID)
+        hasActiveRecorder = false
+        return .archivedBecauseRecorderAlreadyStopped
     }
 
     struct InterruptionEndedResult {
@@ -49,7 +64,7 @@ struct RecordingInterruptionSession {
     }
 
     mutating func handleInterruptionEnded(shouldResumeHint: Bool) -> InterruptionEndedResult {
-        guard status == .paused, hasActiveRecorder else {
+        guard status == .paused, pausedByInterruption else {
             return InterruptionEndedResult(shouldAttemptAutoResume: false, reportedShouldResume: false)
         }
         guard shouldResumeHint else {
@@ -59,23 +74,29 @@ struct RecordingInterruptionSession {
     }
 
     mutating func markAutoResumeSucceeded() {
-        guard status == .paused, hasActiveRecorder else {
+        guard status == .paused else {
             return
         }
         status = .recording
+        pausedByInterruption = false
     }
 
     mutating func handleRecorderDidFinish(
         successfully: Bool,
         stopRequestedByPlugin: Bool,
-        activeSegmentIDAtFinish: String?
+        activeSegmentIDAtFinish: String?,
+        continuingWithAutoResume: Bool = false
     ) -> RecorderFinishOutcome {
         if stopRequestedByPlugin {
             return .ignoreBecauseStopWasRequested
         }
 
         if successfully {
-            return applySuccessfulSystemFinish(activeSegmentIDAtFinish: activeSegmentIDAtFinish)
+            let outcome = applySuccessfulSystemFinish(activeSegmentIDAtFinish: activeSegmentIDAtFinish)
+            if continuingWithAutoResume {
+                return .preserveSegmentAndContinueAutoResume
+            }
+            return outcome
         }
 
         archiveActiveSegment(activeSegmentIDAtFinish: activeSegmentIDAtFinish)
@@ -88,6 +109,7 @@ struct RecordingInterruptionSession {
         activeSegmentID = segmentID
         hasActiveRecorder = true
         status = .recording
+        pausedByInterruption = false
     }
 
     mutating func markManualPause() {
@@ -95,6 +117,7 @@ struct RecordingInterruptionSession {
             return
         }
         status = .paused
+        pausedByInterruption = false
     }
 
     mutating func markManualResume() {
@@ -102,6 +125,11 @@ struct RecordingInterruptionSession {
             return
         }
         status = .recording
+        pausedByInterruption = false
+    }
+
+    mutating func markRecorderReleasedWithoutFinish() {
+        hasActiveRecorder = false
     }
 
     mutating func resetToInactive() {
@@ -109,6 +137,7 @@ struct RecordingInterruptionSession {
         completedSegmentIDs = []
         activeSegmentID = nil
         hasActiveRecorder = false
+        pausedByInterruption = false
     }
 
     // MARK: - Private

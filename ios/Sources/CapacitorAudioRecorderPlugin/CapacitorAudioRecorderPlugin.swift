@@ -39,6 +39,8 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
     private var pauseStartUptime: TimeInterval?
     private var accumulatedPauseDuration: TimeInterval = 0
     private var shouldEmitStoppedEvent = true
+    private var pendingAutoResumeAfterInterruption = false
+    private var pendingManualInterruptionResumeCall: CAPPluginCall?
     private var resetToPlaybackOnStop = false
     // AVAudioSession interruption observer. Active for the lifetime of a
     // recording so phone calls / Siri / alarms can pause cleanly without
@@ -98,13 +100,20 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
             return
         }
 
-        if audioRecorder == nil {
+        if interruptionSession.pausedByInterruption {
+            if audioRecorder != nil {
+                pendingManualInterruptionResumeCall = call
+                audioRecorder?.stop()
+                return
+            }
             do {
-                try startNewRecordingSegment()
+                try resumeAfterInterruptionStartingNewSegment()
             } catch {
                 call.reject("Failed to start a new recording segment after interruption.", nil, error)
                 return
             }
+            call.resolve()
+            return
         }
 
         guard let recorder = audioRecorder else {
@@ -217,9 +226,22 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
     // MARK: - AVAudioRecorderDelegate
 
     public func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
-        resetRecorder(deleteFile: true)
+        if recorder.url == currentFileURL {
+            _ = interruptionSession.handleRecorderDidFinish(
+                successfully: false,
+                stopRequestedByPlugin: false,
+                activeSegmentIDAtFinish: currentFileURL?.lastPathComponent
+            )
+            archiveCurrentSegmentFromSession()
+            audioRecorder = nil
+            syncStatusFromInterruptionSession()
+        }
         let message = error?.localizedDescription ?? "Unknown encoding error."
-        notifyListeners("recordingError", data: ["message": message])
+        let uri = completedSegmentURLs.last?.absoluteString ?? ""
+        notifyListeners("recordingError", data: [
+            "message": message,
+            "uri": uri
+        ])
     }
 
     public func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
@@ -227,25 +249,36 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         let outcome = interruptionSession.handleRecorderDidFinish(
             successfully: flag,
             stopRequestedByPlugin: stopRequestedByPlugin,
-            activeSegmentIDAtFinish: currentFileURL?.lastPathComponent
+            activeSegmentIDAtFinish: currentFileURL?.lastPathComponent,
+            continuingWithAutoResume: pendingAutoResumeAfterInterruption
         )
 
         switch outcome {
         case .ignoreBecauseStopWasRequested:
             return
-        case .preserveSegmentAndStayPaused:
+        case .preserveSegmentAndStayPaused, .preserveSegmentAndContinueAutoResume:
             archiveCurrentSegmentFromSession()
             audioRecorder = nil
             syncStatusFromInterruptionSession()
+            if outcome == .preserveSegmentAndContinueAutoResume {
+                completePendingAutoResumeAfterInterruption()
+            } else if let resumeCall = pendingManualInterruptionResumeCall {
+                pendingManualInterruptionResumeCall = nil
+                completeManualInterruptionResume(call: resumeCall)
+            }
         case .failedPreservePartial:
             archiveCurrentSegmentFromSession()
             audioRecorder = nil
             syncStatusFromInterruptionSession()
+            pendingAutoResumeAfterInterruption = false
+            pendingManualInterruptionResumeCall?.reject("Recording finished unsuccessfully during interruption.")
+            pendingManualInterruptionResumeCall = nil
             let uri = completedSegmentURLs.last?.absoluteString ?? currentFileURL?.absoluteString ?? ""
             notifyListeners("recordingError", data: [
                 "message": "Recording finished unsuccessfully.",
                 "uri": uri
             ])
+            notifyListeners("recordingInterruptionEnded", data: ["shouldResume": false])
         }
     }
 
@@ -336,18 +369,28 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
 
         switch type {
         case .began:
-            guard let recorder = audioRecorder, interruptionSession.handleInterruptionBegan() else { return }
-            recorder.pause()
+            guard let recorder = audioRecorder else { return }
+            let beganOutcome = interruptionSession.handleInterruptionBegan(recorderIsRecording: recorder.isRecording)
+            guard beganOutcome != .ignored else { return }
+
             pauseStartUptime = monotonicUptime()
+            switch beganOutcome {
+            case .pausedActiveRecorder:
+                recorder.pause()
+            case .archivedBecauseRecorderAlreadyStopped:
+                archiveCurrentSegmentFromSession()
+                shouldEmitStoppedEvent = false
+                recorder.stop()
+                audioRecorder = nil
+                interruptionSession.markRecorderReleasedWithoutFinish()
+            case .ignored:
+                break
+            }
             syncStatusFromInterruptionSession()
             notifyListeners("recordingInterruptionBegan", data: [:])
+            notifyListeners("recordingPaused", data: [:])
 
         case .ended:
-            guard status == .paused else {
-                notifyListeners("recordingInterruptionEnded", data: ["shouldResume": false])
-                return
-            }
-
             let shouldResumeHint: Bool = {
                 guard let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt else {
                     return false
@@ -357,26 +400,21 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
             }()
 
             let plan = interruptionSession.handleInterruptionEnded(shouldResumeHint: shouldResumeHint)
-            guard plan.shouldAttemptAutoResume, let recorder = audioRecorder else {
+            guard plan.shouldAttemptAutoResume else {
                 notifyListeners("recordingInterruptionEnded", data: ["shouldResume": false])
+                return
+            }
+
+            if audioRecorder != nil {
+                pendingAutoResumeAfterInterruption = true
+                audioRecorder?.stop()
                 return
             }
 
             var didResumeRecording = false
             do {
-                try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
-                let didStart = recorder.record()
-                if didStart {
-                    if let pauseStart = pauseStartUptime {
-                        accumulatedPauseDuration += monotonicUptime() - pauseStart
-                    }
-                    interruptionSession.markAutoResumeSucceeded()
-                    syncStatusFromInterruptionSession()
-                    pauseStartUptime = nil
-                    didResumeRecording = true
-                } else {
-                    CAPLog.print("CapacitorAudioRecorderPlugin", "AVAudioRecorder.record() returned false after interruption")
-                }
+                try resumeAfterInterruptionStartingNewSegment()
+                didResumeRecording = true
             } catch {
                 CAPLog.print("CapacitorAudioRecorderPlugin", "Failed to resume after interruption: \(error.localizedDescription)")
             }
@@ -418,6 +456,8 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         recordingStartUptime = nil
         pauseStartUptime = nil
         accumulatedPauseDuration = 0
+        pendingAutoResumeAfterInterruption = false
+        pendingManualInterruptionResumeCall = nil
     }
 
     private func syncStatusFromInterruptionSession() {
@@ -468,6 +508,49 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         shouldEmitStoppedEvent = true
     }
 
+    private func resumeAfterInterruptionStartingNewSegment() throws {
+        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+        try startNewRecordingSegment()
+        guard let recorder = audioRecorder else {
+            throw NSError(domain: "CapacitorAudioRecorderPlugin", code: 2, userInfo: [
+                NSLocalizedDescriptionKey: "No recorder available after starting a new segment."
+            ])
+        }
+        let didStart = recorder.record()
+        if !didStart {
+            throw NSError(domain: "CapacitorAudioRecorderPlugin", code: 3, userInfo: [
+                NSLocalizedDescriptionKey: "AVAudioRecorder.record() returned false after interruption."
+            ])
+        }
+        if let pauseStart = pauseStartUptime {
+            accumulatedPauseDuration += monotonicUptime() - pauseStart
+        }
+        interruptionSession.markAutoResumeSucceeded()
+        syncStatusFromInterruptionSession()
+        pauseStartUptime = nil
+    }
+
+    private func completePendingAutoResumeAfterInterruption() {
+        pendingAutoResumeAfterInterruption = false
+        var didResumeRecording = false
+        do {
+            try resumeAfterInterruptionStartingNewSegment()
+            didResumeRecording = true
+        } catch {
+            CAPLog.print("CapacitorAudioRecorderPlugin", "Failed to complete auto-resume after interruption: \(error.localizedDescription)")
+        }
+        notifyListeners("recordingInterruptionEnded", data: ["shouldResume": didResumeRecording])
+    }
+
+    private func completeManualInterruptionResume(call: CAPPluginCall) {
+        do {
+            try resumeAfterInterruptionStartingNewSegment()
+            call.resolve()
+        } catch {
+            call.reject("Failed to start a new recording segment after interruption.", nil, error)
+        }
+    }
+
     private func finalizeStoppedRecording(call: CAPPluginCall) {
         let segments = allSegmentURLs()
         guard !segments.isEmpty else {
@@ -492,20 +575,35 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
             call.resolve(result)
             resetRecorder(deleteFile: false)
         } catch {
-            call.reject("Failed to finalize recording.", nil, error)
+            if let fallbackURL = AudioSegmentMerger.preferredFallbackSegment(from: segments) {
+                let duration = AudioSegmentMerger.durationMilliseconds(for: fallbackURL)
+                let result: [String: Any] = [
+                    "duration": duration,
+                    "uri": fallbackURL.absoluteString,
+                    "mergeFailed": true
+                ]
+                notifyListeners("recordingStopped", data: result)
+                call.resolve(result)
+                resetRecorder(deleteFile: false)
+                return
+            }
+            call.reject("Failed to finalize recording. Segment files were preserved.", nil, error)
         }
     }
 
     private func produceFinalRecording(from segments: [URL]) throws -> (URL, Double) {
-        if segments.count == 1 {
-            let url = segments[0]
+        let usable = AudioSegmentMerger.usableSegments(from: segments)
+        let workingSegments = usable.isEmpty ? segments : usable
+
+        if workingSegments.count == 1 {
+            let url = workingSegments[0]
             let duration = AudioSegmentMerger.durationMilliseconds(for: url)
             return (url, duration)
         }
 
         let directoryURL = try recordingDirectoryURL()
         let mergedURL = directoryURL.appendingPathComponent("\(UUID().uuidString).m4a")
-        let duration = try AudioSegmentMerger.mergeSegments(segments, into: mergedURL)
+        let duration = try AudioSegmentMerger.mergeSegments(workingSegments, into: mergedURL)
         deleteRecordingFiles(at: segments)
         return (mergedURL, duration)
     }

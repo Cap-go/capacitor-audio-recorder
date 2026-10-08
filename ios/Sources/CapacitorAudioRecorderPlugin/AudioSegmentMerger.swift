@@ -10,11 +10,12 @@ enum AudioSegmentMergerError: Error {
 
 enum AudioSegmentMerger {
     static func mergeSegments(_ segmentURLs: [URL], into outputURL: URL) throws -> Double {
-        guard segmentURLs.count > 1 else {
-            if let only = segmentURLs.first {
-                return durationMilliseconds(for: only)
-            }
-            return 0
+        let usable = usableSegments(from: segmentURLs)
+        guard !usable.isEmpty else {
+            throw AudioSegmentMergerError.noAudioInSegment(segmentURLs.first ?? outputURL)
+        }
+        guard usable.count > 1 else {
+            return durationMilliseconds(for: usable[0])
         }
 
         let composition = AVMutableComposition()
@@ -26,18 +27,25 @@ enum AudioSegmentMerger {
         }
 
         var insertTime = CMTime.zero
-        for url in segmentURLs {
+        var insertedCount = 0
+        for url in usable {
             let asset = AVURLAsset(url: url)
-            guard let sourceTrack = asset.tracks(withMediaType: .audio).first else {
-                throw AudioSegmentMergerError.noAudioInSegment(url)
-            }
             let duration = asset.duration
+            guard let sourceTrack = asset.tracks(withMediaType: .audio).first,
+                  duration.isNumeric, CMTimeGetSeconds(duration) > 0 else {
+                continue
+            }
             try compositionTrack.insertTimeRange(
                 CMTimeRange(start: .zero, duration: duration),
                 of: sourceTrack,
                 at: insertTime
             )
             insertTime = CMTimeAdd(insertTime, duration)
+            insertedCount += 1
+        }
+
+        guard insertedCount > 0 else {
+            throw AudioSegmentMergerError.noAudioInSegment(usable[0])
         }
 
         if FileManager.default.fileExists(atPath: outputURL.path) {
@@ -77,6 +85,30 @@ enum AudioSegmentMerger {
     }
 
     static func totalDurationMilliseconds(for urls: [URL]) -> Double {
-        urls.reduce(0) { $0 + durationMilliseconds(for: $1) }
+        usableSegments(from: urls).reduce(0) { $0 + durationMilliseconds(for: $1) }
+    }
+
+    /// Picks the segment with the longest measured duration, falling back to largest file size.
+    static func preferredFallbackSegment(from segmentURLs: [URL]) -> URL? {
+        let candidates = usableSegments(from: segmentURLs)
+        if candidates.isEmpty {
+            return segmentURLs.max(by: { fileByteCount($0) < fileByteCount($1) })
+        }
+        return candidates.max(by: { durationMilliseconds(for: $0) < durationMilliseconds(for: $1) })
+    }
+
+    static func usableSegments(from segmentURLs: [URL]) -> [URL] {
+        segmentURLs.filter { url in
+            let asset = AVURLAsset(url: url)
+            guard asset.tracks(withMediaType: .audio).first != nil else {
+                return false
+            }
+            let seconds = CMTimeGetSeconds(asset.duration)
+            return seconds.isFinite && seconds > 0
+        }
+    }
+
+    private static func fileByteCount(_ url: URL) -> Int64 {
+        (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
     }
 }
