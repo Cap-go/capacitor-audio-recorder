@@ -26,13 +26,17 @@ final class RecordingInterruptionSessionTests: XCTestCase {
         XCTAssertNil(session.activeSegmentID)
         XCTAssertFalse(session.hasActiveRecorder)
         XCTAssertEqual(session.status, .paused)
+        XCTAssertTrue(session.canResumeRecording)
 
         session.markNewSegmentStarted(segmentID: "segment-2.m4a")
+        XCTAssertEqual(session.status, .paused)
+        XCTAssertTrue(session.canResumeRecording)
+
         session.markAutoResumeSucceeded()
         XCTAssertEqual(session.status, .recording)
         XCTAssertEqual(session.activeSegmentID, "segment-2.m4a")
         XCTAssertTrue(session.hasActiveRecorder)
-        XCTAssertTrue(session.canResumeRecording)
+        XCTAssertFalse(session.canResumeRecording)
         XCTAssertTrue(session.canStopRecording)
     }
 
@@ -93,6 +97,7 @@ final class RecordingInterruptionSessionTests: XCTestCase {
         XCTAssertTrue(session.canResumeRecording)
 
         session.markNewSegmentStarted(segmentID: "segment-2.m4a")
+        session.markManualResume()
         XCTAssertEqual(session.status, .recording)
 
         let stopOutcome = session.handleRecorderDidFinish(

@@ -108,7 +108,6 @@ struct RecordingInterruptionSession {
     mutating func markNewSegmentStarted(segmentID: String) {
         activeSegmentID = segmentID
         hasActiveRecorder = true
-        status = .recording
         pausedByInterruption = false
     }
 
