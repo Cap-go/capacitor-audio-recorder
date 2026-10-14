@@ -33,6 +33,9 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
     private var currentFileURL: URL?
     private var completedSegmentURLs: [URL] = []
     private var recordingEncodingSettings: [String: Any]?
+    // "m4a" (MPEG-4, the default) or "aac" (ADTS). AVAudioRecorder picks the container from the
+    // file extension, so the extension is the format.
+    private var recordingFileExtension = "m4a"
     private var interruptionSession = RecordingInterruptionSession()
     private var status: RecordingStatus = .inactive
     private var recordingStartUptime: TimeInterval?
@@ -308,12 +311,8 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         let bitRate = call.getDouble("bitRate") ?? 192_000
         let sampleRate = call.getDouble("sampleRate") ?? 44_100
 
-        let directoryURL = FileManager.default.temporaryDirectory.appendingPathComponent("CapacitorAudioRecorder", isDirectory: true)
-        if !FileManager.default.fileExists(atPath: directoryURL.path) {
-            try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-        }
-
-        let fileURL = directoryURL.appendingPathComponent("\(UUID().uuidString).m4a")
+        recordingFileExtension = call.getString("format")?.lowercased() == "aac" ? "aac" : "m4a"
+        let fileURL = try recordingDirectoryURL().appendingPathComponent("\(UUID().uuidString).\(recordingFileExtension)")
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
             AVSampleRateKey: sampleRate,
@@ -326,7 +325,13 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         recorder.delegate = self
         recorder.isMeteringEnabled = true
         recorder.prepareToRecord()
-        recorder.record()
+        // record() reports a start it could not make (the microphone held by another app, a
+        // session that did not activate): fail the call instead of reporting a recording of nothing.
+        guard recorder.record() else {
+            throw NSError(domain: "CapacitorAudioRecorderPlugin", code: 4, userInfo: [
+                NSLocalizedDescriptionKey: "AVAudioRecorder.record() returned false on start."
+            ])
+        }
 
         audioRecorder = recorder
         currentFileURL = fileURL
@@ -495,7 +500,7 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         }
 
         let directoryURL = try recordingDirectoryURL()
-        let fileURL = directoryURL.appendingPathComponent("\(UUID().uuidString).m4a")
+        let fileURL = directoryURL.appendingPathComponent("\(UUID().uuidString).\(recordingFileExtension)")
         let recorder = try AVAudioRecorder(url: fileURL, settings: settings)
         recorder.delegate = self
         recorder.isMeteringEnabled = true
@@ -577,10 +582,13 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         } catch {
             if let fallbackURL = AudioSegmentMerger.preferredFallbackSegment(from: segments) {
                 let duration = AudioSegmentMerger.durationMilliseconds(for: fallbackURL)
+                // Every segment stays on disk; `segments` names them in recording order, so the
+                // caller can still join them instead of keeping only the fallback.
                 let result: [String: Any] = [
                     "duration": duration,
                     "uri": fallbackURL.absoluteString,
-                    "mergeFailed": true
+                    "mergeFailed": true,
+                    "segments": segments.map { $0.absoluteString }
                 ]
                 notifyListeners("recordingStopped", data: result)
                 call.resolve(result)
@@ -592,6 +600,9 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
     }
 
     private func produceFinalRecording(from segments: [URL]) throws -> (URL, Double) {
+        if recordingFileExtension == "aac" {
+            return try appendAdtsSegments(segments)
+        }
         let usable = AudioSegmentMerger.usableSegments(from: segments)
         let workingSegments = usable.isEmpty ? segments : usable
 
@@ -607,6 +618,29 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         let duration = try AudioSegmentMerger.mergeSegments(workingSegments, into: mergedURL)
         deleteRecordingFiles(at: segments)
         return (mergedURL, duration)
+    }
+
+    /// ADTS segments are joined byte for byte, in recording order: no re-encoding, and no export
+    /// session that iOS can suspend when the app goes to the background right after stop. Empty
+    /// segments (an interruption that began before the first frame) carry nothing and are left out.
+    private func appendAdtsSegments(_ segments: [URL]) throws -> (URL, Double) {
+        let withAudio = segments.filter { fileByteCount($0) > 0 }
+        guard !withAudio.isEmpty else {
+            throw AudioSegmentMergerError.noAudioInSegment(segments.first ?? FileManager.default.temporaryDirectory)
+        }
+        if withAudio.count == 1 {
+            deleteRecordingFiles(at: segments.filter { $0 != withAudio[0] })
+            return (withAudio[0], AudioSegmentMerger.durationMilliseconds(for: withAudio[0]))
+        }
+        let outputURL = try recordingDirectoryURL().appendingPathComponent("\(UUID().uuidString).aac")
+        try AdtsSegmentAppender.append(withAudio, into: outputURL)
+        let duration = AudioSegmentMerger.durationMilliseconds(for: outputURL)
+        deleteRecordingFiles(at: segments)
+        return (outputURL, duration)
+    }
+
+    private func fileByteCount(_ url: URL) -> Int64 {
+        (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
     }
 
     private func deleteRecordingFiles(at urls: [URL]) {

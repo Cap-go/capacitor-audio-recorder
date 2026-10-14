@@ -52,9 +52,10 @@ public class CapacitorAudioRecorderPlugin extends com.getcapacitor.Plugin {
 
         int bitRate = call.getInt("bitRate", 192000);
         int sampleRate = call.getInt("sampleRate", 44100);
+        String format = call.getString("format", FORMAT_M4A);
 
         try {
-            prepareRecorder(bitRate, sampleRate);
+            prepareRecorder(bitRate, sampleRate, format);
             mediaRecorder.start();
             recordingStartTime = SystemClock.elapsedRealtime();
             accumulatedPauseDuration = 0;
@@ -118,9 +119,14 @@ public class CapacitorAudioRecorderPlugin extends com.getcapacitor.Plugin {
         try {
             mediaRecorder.stop();
         } catch (RuntimeException ex) {
-            deleteOutputFile();
+            // The file stays on disk: an ADTS file is readable up to its last frame even when the
+            // encoder did not finish cleanly, and deleting it would lose the whole recording. The
+            // rejection carries its URI so the caller can still keep what was recorded.
+            JSObject data = new JSObject();
+            data.put("uri", outputFile != null ? Uri.fromFile(outputFile).toString() : "");
+            data.put("duration", calculateDuration());
             releaseRecorder();
-            call.reject("Failed to stop recording cleanly.", ex);
+            call.reject("Failed to stop recording cleanly. The recording file was preserved.", null, ex, data);
             return;
         }
 
@@ -219,6 +225,13 @@ public class CapacitorAudioRecorderPlugin extends com.getcapacitor.Plugin {
     @Override
     protected void handleOnDestroy() {
         super.handleOnDestroy();
+        // Stop before releasing, so the encoder flushes what it holds and the file is finished;
+        // release() alone drops the tail of the recording.
+        if (mediaRecorder != null && status != RecordingStatus.INACTIVE) {
+            try {
+                mediaRecorder.stop();
+            } catch (RuntimeException ignored) {}
+        }
         releaseRecorder();
     }
 
@@ -241,11 +254,27 @@ public class CapacitorAudioRecorderPlugin extends com.getcapacitor.Plugin {
         startRecording(call);
     }
 
-    private void prepareRecorder(int bitRate, int sampleRate) throws IOException {
+    static final String FORMAT_M4A = "m4a";
+    static final String FORMAT_AAC = "aac";
+
+    /** `aac` writes ADTS: a stream of self-contained frames that survives a crash; anything else MPEG-4. */
+    static boolean isAdts(@Nullable String format) {
+        return FORMAT_AAC.equalsIgnoreCase(format);
+    }
+
+    static int outputFormatFor(@Nullable String format) {
+        return isAdts(format) ? MediaRecorder.OutputFormat.AAC_ADTS : MediaRecorder.OutputFormat.MPEG_4;
+    }
+
+    static String fileExtensionFor(@Nullable String format) {
+        return isAdts(format) ? FORMAT_AAC : FORMAT_M4A;
+    }
+
+    private void prepareRecorder(int bitRate, int sampleRate, @Nullable String format) throws IOException {
         releaseRecorder();
         mediaRecorder = new MediaRecorder();
         mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
-        mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+        mediaRecorder.setOutputFormat(outputFormatFor(format));
         mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
         mediaRecorder.setAudioEncodingBitRate(bitRate);
         mediaRecorder.setAudioSamplingRate(sampleRate);
@@ -256,7 +285,8 @@ public class CapacitorAudioRecorderPlugin extends com.getcapacitor.Plugin {
             outputDirectory.mkdirs();
         }
 
-        String fileName = "recording-" + new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date()) + ".m4a";
+        String fileName =
+            "recording-" + new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date()) + "." + fileExtensionFor(format);
         outputFile = new File(outputDirectory, fileName);
         mediaRecorder.setOutputFile(outputFile.getAbsolutePath());
         mediaRecorder.prepare();

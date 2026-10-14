@@ -83,7 +83,28 @@ export interface StartRecordingOptions {
    * @since 8.2.10
    */
   resetToPlaybackOnStop?: boolean;
+
+  /**
+   * The container the recording is written in. Only available on Android and iOS.
+   *
+   * - `'m4a'`: MPEG-4 (AAC in an `.m4a` file). Its index is written when the recording stops, so a
+   *   recording that ends in a crash, a force-quit or an empty battery is unreadable.
+   * - `'aac'`: ADTS (AAC in an `.aac` file), a stream of self-contained frames. A recording that
+   *   ends badly stays readable up to its last frame, and on iOS the segments of an interrupted
+   *   recording are joined byte for byte when it stops, without re-encoding.
+   *
+   * @default 'm4a'
+   * @since 8.4.0
+   */
+  format?: RecordingFormat;
 }
+
+/**
+ * The container of a recording; see {@link StartRecordingOptions.format}.
+ *
+ * @since 8.4.0
+ */
+export type RecordingFormat = 'm4a' | 'aac';
 
 /**
  * Result returned by {@link CapacitorAudioRecorderPlugin.stopRecording}.
@@ -111,6 +132,22 @@ export interface StopRecordingResult {
    * @since 1.0.0
    */
   uri?: string;
+
+  /**
+   * `true` when the segments of an interrupted recording could not be joined. `uri` then points
+   * to the longest segment, and `segments` lists all of them. Only available on iOS.
+   *
+   * @since 8.4.0
+   */
+  mergeFailed?: boolean;
+
+  /**
+   * The URIs of every segment of the recording, in recording order, when `mergeFailed` is `true`.
+   * They stay on disk, so the caller can still join them. Only available on iOS.
+   *
+   * @since 8.4.0
+   */
+  segments?: string[];
 }
 
 /**
@@ -252,6 +289,9 @@ export interface CapacitorAudioRecorderPlugin {
 
   /**
    * Stop the current recording and persist the recorded audio.
+   *
+   * When the recorder cannot stop cleanly, the call is rejected and the recording file is kept on
+   * disk; on Android the rejection's `data.uri` points to it.
    *
    * @returns Recording metadata such as duration and URI/blob.
    * @since 1.0.0
