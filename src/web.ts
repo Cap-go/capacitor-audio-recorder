@@ -326,7 +326,7 @@ export class CapacitorAudioRecorderWeb extends WebPlugin implements CapacitorAud
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach((track) => track.stop());
       return 'granted';
-    } catch (error) {
+    } catch {
       return 'denied';
     }
   }
