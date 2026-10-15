@@ -28,6 +28,20 @@ final class AdtsSegmentAppenderTests: XCTestCase {
         XCTAssertEqual(decodedSeconds(output), decodedSeconds(first) + decodedSeconds(second), accuracy: 0.05)
     }
 
+    /// An interruption that begins before the first frame leaves a 0-byte segment: it adds nothing.
+    func testAppend_anEmptySegmentAddsNothing() throws {
+        let first = try writeTone(named: "first.aac", seconds: 1.0)
+        let empty = directory.appendingPathComponent("empty.aac")
+        try Data().write(to: empty)
+        let second = try writeTone(named: "second.aac", seconds: 1.0)
+        let output = directory.appendingPathComponent("joined.aac")
+
+        try AdtsSegmentAppender.append([first, empty, second], into: output)
+
+        XCTAssertEqual(try Data(contentsOf: output), try Data(contentsOf: first) + Data(contentsOf: second))
+        XCTAssertEqual(decodedSeconds(output), decodedSeconds(first) + decodedSeconds(second), accuracy: 0.05)
+    }
+
     func testAppend_failsClosedWhenASegmentIsMissing() throws {
         let first = try writeTone(named: "first.aac", seconds: 0.5)
         let missing = directory.appendingPathComponent("missing.aac")
