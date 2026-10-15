@@ -328,6 +328,9 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         // record() reports a start it could not make (the microphone held by another app, a
         // session that did not activate): fail the call instead of reporting a recording of nothing.
         guard recorder.record() else {
+            // Nothing was recorded: leave no empty file behind for anyone to mistake for a recording.
+            recorder.stop()
+            try? FileManager.default.removeItem(at: fileURL)
             throw NSError(domain: "CapacitorAudioRecorderPlugin", code: 4, userInfo: [
                 NSLocalizedDescriptionKey: "AVAudioRecorder.record() returned false on start."
             ])
@@ -623,6 +626,8 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
     /// ADTS segments are joined byte for byte, in recording order: no re-encoding, and no export
     /// session that iOS can suspend when the app goes to the background right after stop. Empty
     /// segments (an interruption that began before the first frame) carry nothing and are left out.
+    /// The result is named `<uuid>-joined.aac`, so whoever finds it next to segments that were not
+    /// deleted yet (the app ended in between) knows it already holds them.
     private func appendAdtsSegments(_ segments: [URL]) throws -> (URL, Double) {
         let withAudio = segments.filter { fileByteCount($0) > 0 }
         guard !withAudio.isEmpty else {
@@ -630,13 +635,27 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         }
         if withAudio.count == 1 {
             deleteRecordingFiles(at: segments.filter { $0 != withAudio[0] })
-            return (withAudio[0], AudioSegmentMerger.durationMilliseconds(for: withAudio[0]))
+            return (withAudio[0], Self.preciseDurationMilliseconds(for: withAudio[0]))
         }
-        let outputURL = try recordingDirectoryURL().appendingPathComponent("\(UUID().uuidString).aac")
-        try AdtsSegmentAppender.append(withAudio, into: outputURL)
-        let duration = AudioSegmentMerger.durationMilliseconds(for: outputURL)
-        deleteRecordingFiles(at: segments)
-        return (outputURL, duration)
+        let outputURL = try recordingDirectoryURL().appendingPathComponent("\(UUID().uuidString)-joined.aac")
+        do {
+            try AdtsSegmentAppender.append(withAudio, into: outputURL)
+        } catch AdtsSegmentAppenderError.writeFailed {
+            // A full disk has no room for a copy of the recording: join onto the first segment.
+            let joined = try AdtsSegmentAppender.appendInPlace(withAudio)
+            try FileManager.default.moveItem(at: joined, to: outputURL)
+        }
+        deleteRecordingFiles(at: segments.filter { $0 != outputURL })
+        return (outputURL, Self.preciseDurationMilliseconds(for: outputURL))
+    }
+
+    /// ADTS has no index; without this option AVFoundation estimates the length from the bitrate
+    /// of the first frames. With it, the file is read to the end and the length is exact.
+    private static func preciseDurationMilliseconds(for url: URL) -> Double {
+        let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
+        let seconds = CMTimeGetSeconds(asset.duration)
+        guard seconds.isFinite, seconds > 0 else { return 0 }
+        return seconds * 1000
     }
 
     private func fileByteCount(_ url: URL) -> Int64 {
