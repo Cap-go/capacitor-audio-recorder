@@ -50,35 +50,6 @@ final class AdtsSegmentAppenderTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: output), Data([1, 2, 3]))
     }
 
-    /// A full disk has no room for a copy: the join goes onto the first segment, and every other
-    /// segment is gone once it is in. Same bytes, same order, one file left.
-    func testAppendInPlace_joinsOntoTheFirstSegmentAndRemovesTheOthers() throws {
-        let first = try writeTone(named: "first.aac", seconds: 1.0)
-        let second = try writeTone(named: "second.aac", seconds: 2.0)
-        let third = try writeTone(named: "third.aac", seconds: 0.5)
-        let expected = try Data(contentsOf: first) + Data(contentsOf: second) + Data(contentsOf: third)
-        let seconds = decodedSeconds(first) + decodedSeconds(second) + decodedSeconds(third)
-
-        let joined = try AdtsSegmentAppender.appendInPlace([first, second, third])
-
-        XCTAssertEqual(joined, first)
-        XCTAssertEqual(try Data(contentsOf: joined), expected)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: second.path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: third.path))
-        XCTAssertEqual(decodedSeconds(joined), seconds, accuracy: 0.05)
-    }
-
-    func testAppendInPlace_stopsAtAMissingSegmentAndKeepsWhatIsNotInYet() throws {
-        let first = try writeTone(named: "first.aac", seconds: 0.5)
-        let missing = directory.appendingPathComponent("missing.aac")
-        let third = try writeTone(named: "third.aac", seconds: 0.5)
-
-        XCTAssertThrowsError(try AdtsSegmentAppender.appendInPlace([first, missing, third])) { error in
-            XCTAssertEqual(error as? AdtsSegmentAppenderError, .segmentUnreadable(missing))
-        }
-        XCTAssertTrue(FileManager.default.fileExists(atPath: third.path), "a segment that is not in yet is never deleted")
-    }
-
     /// What a hard kill leaves behind: the file stops in the middle of a frame. ADTS still plays up
     /// to the last whole frame; MPEG-4 without its closing `moov` plays nothing.
     func testUnfinishedFile_adtsDecodesToTheLastWholeFrame_mpeg4DecodesNothing() throws {

@@ -17,7 +17,7 @@ enum AdtsSegmentAppenderError: Error, Equatable {
 /// `append` writes to a temp file next to the output and renames it into place. It fails closed:
 /// if any segment cannot be read or the disk refuses a write, the temp file is removed, the output
 /// is left as it was, and the segments stay on disk. It needs free space for one more copy of the
-/// recording; `appendInPlace` is for when that space is not there.
+/// recording; without it the join fails and the segments stay, for the caller to join later.
 enum AdtsSegmentAppender {
     private static let chunkSize = 1 << 20
 
@@ -52,32 +52,6 @@ enum AdtsSegmentAppender {
             throw AdtsSegmentAppenderError.renameFailed(error.localizedDescription)
         }
         return written
-    }
-
-    /// The join for a full disk: the other segments are appended onto the first, and each is
-    /// deleted as soon as it is in, so the extra space needed is never more than one chunk. Not
-    /// atomic: interrupted half way, the first segment holds part of the next one while that one
-    /// is still on disk. A later join then repeats that part — audio twice, never audio lost.
-    /// Returns the first segment, which is now the recording.
-    @discardableResult
-    static func appendInPlace(_ segments: [URL]) throws -> URL {
-        guard let first = segments.first else { throw AdtsSegmentAppenderError.noSegments }
-        guard let output = try? FileHandle(forWritingTo: first) else {
-            throw AdtsSegmentAppenderError.segmentUnreadable(first)
-        }
-        do {
-            try output.seekToEnd()
-            for segment in segments.dropFirst() {
-                try copy(segment, to: output)
-                try output.synchronize()
-                try? FileManager.default.removeItem(at: segment)
-            }
-            try close(output)
-        } catch {
-            try? output.close()
-            throw error
-        }
-        return first
     }
 
     /// Copies one segment to the end of `output`, with the throwing FileHandle API: the legacy

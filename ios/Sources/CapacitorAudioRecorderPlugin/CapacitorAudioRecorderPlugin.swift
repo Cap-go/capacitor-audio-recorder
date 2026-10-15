@@ -329,7 +329,8 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         // session that did not activate): fail the call instead of reporting a recording of nothing.
         guard recorder.record() else {
             // Nothing was recorded: leave no empty file behind for anyone to mistake for a recording.
-            recorder.stop()
+            // (No stop(): this recorder never started, and its delegate would report a finish.)
+            recorder.delegate = nil
             try? FileManager.default.removeItem(at: fileURL)
             throw NSError(domain: "CapacitorAudioRecorderPlugin", code: 4, userInfo: [
                 NSLocalizedDescriptionKey: "AVAudioRecorder.record() returned false on start."
@@ -638,14 +639,9 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
             return (withAudio[0], Self.preciseDurationMilliseconds(for: withAudio[0]))
         }
         let outputURL = try recordingDirectoryURL().appendingPathComponent("\(UUID().uuidString)-joined.aac")
-        do {
-            try AdtsSegmentAppender.append(withAudio, into: outputURL)
-        } catch AdtsSegmentAppenderError.writeFailed {
-            // A full disk has no room for a copy of the recording: join onto the first segment.
-            let joined = try AdtsSegmentAppender.appendInPlace(withAudio)
-            try FileManager.default.moveItem(at: joined, to: outputURL)
-        }
-        deleteRecordingFiles(at: segments.filter { $0 != outputURL })
+        // Without room for the copy this throws, and every segment stays (mergeFailed + segments).
+        try AdtsSegmentAppender.append(withAudio, into: outputURL)
+        deleteRecordingFiles(at: segments)
         return (outputURL, Self.preciseDurationMilliseconds(for: outputURL))
     }
 
