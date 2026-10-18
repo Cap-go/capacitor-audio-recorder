@@ -6,6 +6,7 @@ import type {
   PermissionState,
   PermissionStatus,
   RecordingErrorEvent,
+  RecordingInterruptionEndedEvent,
   RecordingStoppedEvent,
   StartRecordingOptions,
   StopRecordingResult,
@@ -190,13 +191,22 @@ export class CapacitorAudioRecorderWeb extends WebPlugin implements CapacitorAud
     return { recordAudio: state };
   }
 
-  async addListener<T extends 'recordingError' | 'recordingPaused' | 'recordingStopped'>(
+  async addListener<
+    T extends
+      | 'recordingError'
+      | 'recordingPaused'
+      | 'recordingStopped'
+      | 'recordingInterruptionBegan'
+      | 'recordingInterruptionEnded',
+  >(
     eventName: T,
     listenerFunc: T extends 'recordingError'
       ? (event: RecordingErrorEvent) => void
       : T extends 'recordingStopped'
         ? (event: RecordingStoppedEvent) => void
-        : () => void,
+        : T extends 'recordingInterruptionEnded'
+          ? (event: RecordingInterruptionEndedEvent) => void
+          : () => void,
   ): Promise<PluginListenerHandle> {
     return super.addListener(eventName, listenerFunc as any);
   }

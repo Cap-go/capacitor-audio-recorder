@@ -140,6 +140,30 @@ export interface RecordingErrorEvent {
    * @since 1.0.0
    */
   message: string;
+
+  /**
+   * URI of the most recently preserved segment when the error occurred.
+   *
+   * Emitted on iOS. The segment may be partial. May be an empty string when no
+   * segment was preserved yet.
+   *
+   * @since 8.2.0
+   */
+  uri?: string;
+}
+
+/**
+ * Event emitted when an audio session interruption ends on iOS (for example after a phone call).
+ *
+ * @since 8.2.0
+ */
+export interface RecordingInterruptionEndedEvent {
+  /**
+   * Whether the plugin resumed recording after the interruption.
+   *
+   * @since 8.2.0
+   */
+  shouldResume: boolean;
 }
 
 /**
@@ -311,6 +335,30 @@ export interface CapacitorAudioRecorderPlugin {
   addListener(
     eventName: 'recordingStopped',
     listenerFunc: (event: RecordingStoppedEvent) => void,
+  ): Promise<PluginListenerHandle>;
+
+  /**
+   * Listen for the start of an audio session interruption while recording.
+   *
+   * Only emitted on iOS when the system pauses or archives the active recording
+   * (for example when a phone call begins).
+   *
+   * @since 8.2.0
+   */
+  addListener(eventName: 'recordingInterruptionBegan', listenerFunc: () => void): Promise<PluginListenerHandle>;
+
+  /**
+   * Listen for the end of an audio session interruption while recording.
+   *
+   * Only emitted on iOS. Usually follows `recordingInterruptionBegan`, but may
+   * also fire after a recorder failure without a prior began event, with
+   * `shouldResume` set to `false`.
+   *
+   * @since 8.2.0
+   */
+  addListener(
+    eventName: 'recordingInterruptionEnded',
+    listenerFunc: (event: RecordingInterruptionEndedEvent) => void,
   ): Promise<PluginListenerHandle>;
 
   /**
