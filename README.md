@@ -352,7 +352,7 @@ Only emitted on iOS when the system pauses or archives the active recording
 
 **Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
 
-**Since:** 8.3.0
+**Since:** 8.2.0
 
 --------------------
 
@@ -365,8 +365,9 @@ addListener(eventName: 'recordingInterruptionEnded', listenerFunc: (event: Recor
 
 Listen for the end of an audio session interruption while recording.
 
-Only emitted on iOS after an interruption that triggered
-`recordingInterruptionBegan`.
+Only emitted on iOS. Usually follows `recordingInterruptionBegan`, but may
+also fire after a recorder failure without a prior began event, with
+`shouldResume` set to `false`.
 
 | Param              | Type                                                                                                            |
 | ------------------ | --------------------------------------------------------------------------------------------------------------- |
@@ -375,7 +376,7 @@ Only emitted on iOS after an interruption that triggered
 
 **Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
 
-**Since:** 8.3.0
+**Since:** 8.2.0
 
 --------------------
 
@@ -474,10 +475,10 @@ and {@link CapacitorAudioRecorderPlugin.requestPermissions}.
 
 Event emitted when an error occurs during recording.
 
-| Prop          | Type                | Description                                                                                                                                      | Since |
-| ------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----- |
-| **`message`** | <code>string</code> | The error message.                                                                                                                               | 1.0.0 |
-| **`uri`**     | <code>string</code> | URI of the last successfully recorded segment when the error occurred. Emitted on iOS. May be an empty string when no segment was completed yet. | 8.3.0 |
+| Prop          | Type                | Description                                                                                                                                                               | Since |
+| ------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| **`message`** | <code>string</code> | The error message.                                                                                                                                                        | 1.0.0 |
+| **`uri`**     | <code>string</code> | URI of the most recently preserved segment when the error occurred. Emitted on iOS. The segment may be partial. May be an empty string when no segment was preserved yet. | 8.2.0 |
 
 
 #### RecordingInterruptionEndedEvent
@@ -486,7 +487,7 @@ Event emitted when an audio session interruption ends on iOS (for example after 
 
 | Prop               | Type                 | Description                                                  | Since |
 | ------------------ | -------------------- | ------------------------------------------------------------ | ----- |
-| **`shouldResume`** | <code>boolean</code> | Whether the plugin resumed recording after the interruption. | 8.3.0 |
+| **`shouldResume`** | <code>boolean</code> | Whether the plugin resumed recording after the interruption. | 8.2.0 |
 
 
 ### Type Aliases
