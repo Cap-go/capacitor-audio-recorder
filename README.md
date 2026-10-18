@@ -21,7 +21,7 @@ Record audio from the microphone on iOS, Android and the web with one Capacitor 
 - **Record**: `startRecording()`, `stopRecording()` and `cancelRecording()` to capture or discard a clip.
 - **Pause and resume**: `pauseRecording()` and `resumeRecording()` without starting a new file.
 - **Input level**: `getCurrentAmplitude()` returns the microphone level from 0 to 1 for meters and waveforms.
-- **Status and events**: `getRecordingStatus()` plus `recordingPaused`, `recordingStopped` and `recordingError` listeners.
+- **Status and events**: `getRecordingStatus()` plus `recordingPaused`, `recordingStopped`, `recordingError`, and (iOS only) `recordingInterruptionBegan` / `recordingInterruptionEnded` listeners.
 - **Permissions**: `checkPermissions()` and `requestPermissions()` for microphone access.
 - **Platforms**: iOS, Android and Web. iOS uses AVFoundation, Android uses `MediaRecorder`, and web uses the browser recorder.
 
@@ -106,6 +106,8 @@ The plugin does not automatically put your app into a background-safe mode, you 
 * [`addListener('recordingError', ...)`](#addlistenerrecordingerror-)
 * [`addListener('recordingPaused', ...)`](#addlistenerrecordingpaused-)
 * [`addListener('recordingStopped', ...)`](#addlistenerrecordingstopped-)
+* [`addListener('recordingInterruptionBegan', ...)`](#addlistenerrecordinginterruptionbegan-)
+* [`addListener('recordingInterruptionEnded', ...)`](#addlistenerrecordinginterruptionended-)
 * [`removeAllListeners()`](#removealllisteners)
 * [`getPluginVersion()`](#getpluginversion)
 * [Interfaces](#interfaces)
@@ -332,6 +334,52 @@ Listen for recording completion events.
 --------------------
 
 
+### addListener('recordingInterruptionBegan', ...)
+
+```typescript
+addListener(eventName: 'recordingInterruptionBegan', listenerFunc: () => void) => Promise<PluginListenerHandle>
+```
+
+Listen for the start of an audio session interruption while recording.
+
+Only emitted on iOS when the system pauses or archives the active recording
+(for example when a phone call begins).
+
+| Param              | Type                                      |
+| ------------------ | ----------------------------------------- |
+| **`eventName`**    | <code>'recordingInterruptionBegan'</code> |
+| **`listenerFunc`** | <code>() =&gt; void</code>                |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+**Since:** 8.3.0
+
+--------------------
+
+
+### addListener('recordingInterruptionEnded', ...)
+
+```typescript
+addListener(eventName: 'recordingInterruptionEnded', listenerFunc: (event: RecordingInterruptionEndedEvent) => void) => Promise<PluginListenerHandle>
+```
+
+Listen for the end of an audio session interruption while recording.
+
+Only emitted on iOS after an interruption that triggered
+`recordingInterruptionBegan`.
+
+| Param              | Type                                                                                                            |
+| ------------------ | --------------------------------------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'recordingInterruptionEnded'</code>                                                                       |
+| **`listenerFunc`** | <code>(event: <a href="#recordinginterruptionendedevent">RecordingInterruptionEndedEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+**Since:** 8.3.0
+
+--------------------
+
+
 ### removeAllListeners()
 
 ```typescript
@@ -426,9 +474,19 @@ and {@link CapacitorAudioRecorderPlugin.requestPermissions}.
 
 Event emitted when an error occurs during recording.
 
-| Prop          | Type                | Description        | Since |
-| ------------- | ------------------- | ------------------ | ----- |
-| **`message`** | <code>string</code> | The error message. | 1.0.0 |
+| Prop          | Type                | Description                                                                                                                                      | Since |
+| ------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----- |
+| **`message`** | <code>string</code> | The error message.                                                                                                                               | 1.0.0 |
+| **`uri`**     | <code>string</code> | URI of the last successfully recorded segment when the error occurred. Emitted on iOS. May be an empty string when no segment was completed yet. | 8.3.0 |
+
+
+#### RecordingInterruptionEndedEvent
+
+Event emitted when an audio session interruption ends on iOS (for example after a phone call).
+
+| Prop               | Type                 | Description                                                  | Since |
+| ------------------ | -------------------- | ------------------------------------------------------------ | ----- |
+| **`shouldResume`** | <code>boolean</code> | Whether the plugin resumed recording after the interruption. | 8.3.0 |
 
 
 ### Type Aliases
