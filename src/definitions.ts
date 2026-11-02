@@ -100,7 +100,7 @@ export interface StartRecordingOptions {
 }
 
 /**
- * The container of a recording; see {@link StartRecordingOptions.format}.
+ * The container of a recording; see `StartRecordingOptions.format`.
  *
  * @since 8.4.0
  */
@@ -135,7 +135,8 @@ export interface StopRecordingResult {
 
   /**
    * `true` when the segments of an interrupted recording could not be joined. `uri` then points
-   * to the longest segment, and `segments` lists all of them. Only available on iOS.
+   * to the longest segment (or, when no segment has a readable duration, the largest file), and
+   * `segments` lists all of them. Only available on iOS.
    *
    * @since 8.4.0
    */
@@ -290,8 +291,9 @@ export interface CapacitorAudioRecorderPlugin {
   /**
    * Stop the current recording and persist the recorded audio.
    *
-   * When the recorder cannot stop cleanly, the call is rejected and the recording file is kept on
-   * disk; on Android the rejection's `data.uri` points to it.
+   * On Android, when the recorder cannot stop cleanly, the call is rejected and the recording file
+   * is kept on disk; the rejection's `data.uri` points to it. On iOS, when the segments of an
+   * interrupted recording cannot be joined, the call resolves with `mergeFailed` and `segments`.
    *
    * @returns Recording metadata such as duration and URI/blob.
    * @since 1.0.0

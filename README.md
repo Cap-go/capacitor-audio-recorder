@@ -172,8 +172,9 @@ stopRecording() => Promise<StopRecordingResult>
 
 Stop the current recording and persist the recorded audio.
 
-When the recorder cannot stop cleanly, the call is rejected and the recording file is kept on
-disk; on Android the rejection's `data.uri` points to it.
+On Android, when the recorder cannot stop cleanly, the call is rejected and the recording file
+is kept on disk; the rejection's `data.uri` points to it. On iOS, when the segments of an
+interrupted recording cannot be joined, the call resolves with `mergeFailed` and `segments`.
 
 **Returns:** <code>Promise&lt;<a href="#stoprecordingresult">StopRecordingResult</a>&gt;</code>
 
@@ -433,13 +434,13 @@ Options accepted by {@link CapacitorAudioRecorderPlugin.startRecording}.
 
 Result returned by {@link CapacitorAudioRecorderPlugin.stopRecording}.
 
-| Prop              | Type                  | Description                                                                                                                                                                  | Since |
-| ----------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| **`blob`**        | <code>Blob</code>     | The recorded audio as a Blob. Only available on Web.                                                                                                                         | 1.0.0 |
-| **`duration`**    | <code>number</code>   | The duration of the recording in milliseconds.                                                                                                                               | 1.0.0 |
-| **`uri`**         | <code>string</code>   | The URI pointing to the recorded file. Only available on Android and iOS.                                                                                                    | 1.0.0 |
-| **`mergeFailed`** | <code>boolean</code>  | `true` when the segments of an interrupted recording could not be joined. `uri` then points to the longest segment, and `segments` lists all of them. Only available on iOS. | 8.4.0 |
-| **`segments`**    | <code>string[]</code> | The URIs of every segment of the recording, in recording order, when `mergeFailed` is `true`. They stay on disk, so the caller can still join them. Only available on iOS.   | 8.4.0 |
+| Prop              | Type                  | Description                                                                                                                                                                                                                                  | Since |
+| ----------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| **`blob`**        | <code>Blob</code>     | The recorded audio as a Blob. Only available on Web.                                                                                                                                                                                         | 1.0.0 |
+| **`duration`**    | <code>number</code>   | The duration of the recording in milliseconds.                                                                                                                                                                                               | 1.0.0 |
+| **`uri`**         | <code>string</code>   | The URI pointing to the recorded file. Only available on Android and iOS.                                                                                                                                                                    | 1.0.0 |
+| **`mergeFailed`** | <code>boolean</code>  | `true` when the segments of an interrupted recording could not be joined. `uri` then points to the longest segment (or, when no segment has a readable duration, the largest file), and `segments` lists all of them. Only available on iOS. | 8.4.0 |
+| **`segments`**    | <code>string[]</code> | The URIs of every segment of the recording, in recording order, when `mergeFailed` is `true`. They stay on disk, so the caller can still join them. Only available on iOS.                                                                   | 8.4.0 |
 
 
 #### GetRecordingStatusResult
@@ -501,7 +502,7 @@ Event emitted when an audio session interruption ends on iOS (for example after 
 
 #### RecordingFormat
 
-The container of a recording; see {@link <a href="#startrecordingoptions">StartRecordingOptions.format</a>}.
+The container of a recording; see <a href="#startrecordingoptions">`StartRecordingOptions.format`</a>.
 
 <code>'m4a' | 'aac'</code>
 

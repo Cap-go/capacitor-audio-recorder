@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.UUID;
 
 @CapacitorPlugin(
     name = "CapacitorAudioRecorder",
@@ -285,8 +286,15 @@ public class CapacitorAudioRecorderPlugin extends com.getcapacitor.Plugin {
             outputDirectory.mkdirs();
         }
 
+        // The timestamp alone repeats within a second: a stop and a new start in the same second
+        // would write over the recording that was just handed back.
         String fileName =
-            "recording-" + new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date()) + "." + fileExtensionFor(format);
+            "recording-" +
+            new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date()) +
+            "-" +
+            UUID.randomUUID() +
+            "." +
+            fileExtensionFor(format);
         outputFile = new File(outputDirectory, fileName);
         mediaRecorder.setOutputFile(outputFile.getAbsolutePath());
         mediaRecorder.prepare();

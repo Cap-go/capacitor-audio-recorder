@@ -70,6 +70,8 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
                 call.resolve()
             } catch {
                 self.resetRecorder(deleteFile: true)
+                // Nothing records: give the session back, so other audio is not left behind it.
+                try? self.deactivateSessionIfNeeded()
                 call.reject("Failed to start recording.", nil, error)
             }
         }
@@ -585,7 +587,9 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
             resetRecorder(deleteFile: false)
         } catch {
             if let fallbackURL = AudioSegmentMerger.preferredFallbackSegment(from: segments) {
-                let duration = AudioSegmentMerger.durationMilliseconds(for: fallbackURL)
+                let duration = recordingFileExtension == "aac"
+                    ? Self.preciseDurationMilliseconds(for: fallbackURL)
+                    : AudioSegmentMerger.durationMilliseconds(for: fallbackURL)
                 // Every segment stays on disk; `segments` names them in recording order, so the
                 // caller can still join them instead of keeping only the fallback.
                 let result: [String: Any] = [
@@ -626,11 +630,13 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
 
     /// ADTS segments are joined byte for byte, in recording order: no re-encoding, and no export
     /// session that iOS can suspend when the app goes to the background right after stop. Empty
-    /// segments (an interruption that began before the first frame) carry nothing and are left out.
+    /// segments (an interruption that began before the first frame) carry nothing and are left out;
+    /// a segment whose size cannot be read is not known to be empty, so it goes to the join, which
+    /// then fails closed if it cannot be read.
     /// The result is named `<uuid>-joined.aac`, so whoever finds it next to segments that were not
     /// deleted yet (the app ended in between) knows it already holds them.
     private func appendAdtsSegments(_ segments: [URL]) throws -> (URL, Double) {
-        let withAudio = segments.filter { fileByteCount($0) > 0 }
+        let withAudio = segments.filter { fileByteCount($0) != 0 }
         guard !withAudio.isEmpty else {
             throw AudioSegmentMergerError.noAudioInSegment(segments.first ?? FileManager.default.temporaryDirectory)
         }
@@ -654,8 +660,9 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         return seconds * 1000
     }
 
-    private func fileByteCount(_ url: URL) -> Int64 {
-        (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
+    /// `nil` when the size cannot be read (the file is missing or unreadable).
+    private func fileByteCount(_ url: URL) -> Int64? {
+        try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64
     }
 
     private func deleteRecordingFiles(at urls: [URL]) {
