@@ -636,9 +636,9 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         guard !withAudio.isEmpty else {
             throw AudioSegmentMergerError.noAudioInSegment(segments.first ?? FileManager.default.temporaryDirectory)
         }
-        if withAudio.count == 1 {
-            deleteRecordingFiles(at: segments.filter { $0 != withAudio[0] })
-            return (withAudio[0], Self.preciseDurationMilliseconds(for: withAudio[0]))
+        if let sole = try Self.soleRecording(in: withAudio) {
+            deleteRecordingFiles(at: segments.filter { $0 != sole })
+            return (sole, Self.preciseDurationMilliseconds(for: sole))
         }
         let outputURL = try recordingDirectoryURL().appendingPathComponent("\(UUID().uuidString)-joined.aac")
         // Without room for the copy this throws, and every segment stays (mergeFailed + segments).
@@ -665,6 +665,17 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
             let size = try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64
             return size != 0
         }
+    }
+
+    /// The one segment that is the whole recording, when only one is left to join; `nil` when there
+    /// are more. A sole segment whose size cannot be read (missing, unreadable) is no recording: it
+    /// throws, so the stop falls back to `mergeFailed` and the segments stay.
+    static func soleRecording(in segments: [URL]) throws -> URL? {
+        guard segments.count == 1 else { return nil }
+        let url = segments[0]
+        let size = try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64
+        guard let size, size > 0 else { throw AudioSegmentMergerError.noAudioInSegment(url) }
+        return url
     }
 
     /// The duration reported with `mergeFailed`: precise for ADTS, which has no index.

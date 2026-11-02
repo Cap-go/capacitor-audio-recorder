@@ -31,6 +31,8 @@ enum AdtsSegmentAppender {
     private static let chunkSize = 1 << 20
     /// Flushes a file descriptor to storage. A seam for tests, which make it fail.
     static var flush: (Int32) -> Bool = flushToStorage
+    /// Opens the temp file for writing. A seam for tests, which make it fail.
+    static var openForWriting: (URL) -> FileHandle? = { try? FileHandle(forWritingTo: $0) }
 
     @discardableResult
     static func append(_ segments: [URL], into outputURL: URL) throws -> UInt64 {
@@ -41,7 +43,7 @@ enum AdtsSegmentAppender {
         guard fileManager.createFile(atPath: tempURL.path, contents: nil) else {
             throw AdtsSegmentAppenderError.cannotOpenOutput
         }
-        guard let output = try? FileHandle(forWritingTo: tempURL) else {
+        guard let output = openForWriting(tempURL) else {
             try? fileManager.removeItem(at: tempURL)
             throw AdtsSegmentAppenderError.cannotOpenOutput
         }

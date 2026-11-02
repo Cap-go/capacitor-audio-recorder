@@ -31,4 +31,19 @@ final class CapacitorAudioRecorderPluginTests: XCTestCase {
 
         XCTAssertEqual(CapacitorAudioRecorderPlugin.segmentsToJoin([withAudio, empty, missing]), [withAudio, missing])
     }
+
+    /// One segment left is the recording only if it can be read; an unreadable one is a failure,
+    /// not a recording of nothing that costs the other segments.
+    func testSoleRecording_isOnlyASegmentThatCanBeRead() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("sole-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let withAudio = directory.appendingPathComponent("a.aac")
+        try Data([0xFF, 0xF1, 0x50]).write(to: withAudio)
+        let missing = directory.appendingPathComponent("b.aac")
+
+        XCTAssertEqual(try CapacitorAudioRecorderPlugin.soleRecording(in: [withAudio]), withAudio)
+        XCTAssertNil(try CapacitorAudioRecorderPlugin.soleRecording(in: [withAudio, missing]))
+        XCTAssertThrowsError(try CapacitorAudioRecorderPlugin.soleRecording(in: [missing]))
+    }
 }

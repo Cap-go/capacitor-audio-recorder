@@ -13,6 +13,7 @@ final class AdtsSegmentAppenderTests: XCTestCase {
 
     override func tearDownWithError() throws {
         AdtsSegmentAppender.flush = AdtsSegmentAppender.flushToStorage
+        AdtsSegmentAppender.openForWriting = { try? FileHandle(forWritingTo: $0) }
         try? FileManager.default.removeItem(at: directory)
     }
 
@@ -110,6 +111,35 @@ final class AdtsSegmentAppenderTests: XCTestCase {
         XCTAssertThrowsError(try AdtsSegmentAppender.append([first, second], into: output))
         XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: output.appendingPathExtension("appending").path))
+    }
+
+    /// The flush of the directory, after the rename, fails: the joined file is removed again, so no
+    /// copy is left that nobody reports.
+    func testAppend_aDirectoryFlushThatFailsRemovesTheJoinedFile() throws {
+        let first = try writeTone(named: "first.aac", seconds: 0.5)
+        let second = try writeTone(named: "second.aac", seconds: 0.5)
+        let output = directory.appendingPathComponent("joined.aac")
+        var flushes = 0
+        AdtsSegmentAppender.flush = { _ in
+            flushes += 1
+            return flushes == 1
+        }
+
+        XCTAssertThrowsError(try AdtsSegmentAppender.append([first, second], into: output))
+        XCTAssertEqual(flushes, 2)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: first.path))
+    }
+
+    /// The temp file was made but cannot be opened: it is removed again, not left beside the output.
+    func testAppend_aTempFileThatCannotBeOpenedIsRemoved() throws {
+        let first = try writeTone(named: "first.aac", seconds: 0.5)
+        let output = directory.appendingPathComponent("joined.aac")
+        AdtsSegmentAppender.openForWriting = { _ in nil }
+
+        XCTAssertThrowsError(try AdtsSegmentAppender.append([first], into: output))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.appendingPathExtension("appending").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
     }
 
     func testFlushToStorage_flushesARealFileAndRefusesABadDescriptor() throws {
