@@ -45,6 +45,18 @@ public class RecordingDurabilityTest {
     }
 
     @Test
+    public void recordingFileName_twoStartsInTheSameSecondGetTwoFiles() {
+        java.util.Date sameSecond = new java.util.Date(1_790_000_000_000L);
+        String first = CapacitorAudioRecorderPlugin.recordingFileName(sameSecond, "aac");
+        String second = CapacitorAudioRecorderPlugin.recordingFileName(sameSecond, "aac");
+
+        assertFalse("A new start must not write over the recording just handed back", first.equals(second));
+        String uuid = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+        assertTrue(first, first.matches("recording-\\d{8}-\\d{6}-" + uuid + "\\.aac"));
+        assertTrue(CapacitorAudioRecorderPlugin.recordingFileName(sameSecond, null).endsWith(".m4a"));
+    }
+
+    @Test
     public void stopRecording_whenStopFails_keepsTheFileAndHandsBackItsUri() throws Exception {
         CapacitorAudioRecorderPlugin plugin = new CapacitorAudioRecorderPlugin();
         MediaRecorder recorder = mock(MediaRecorder.class);

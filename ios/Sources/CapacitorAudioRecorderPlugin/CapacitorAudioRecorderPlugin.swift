@@ -69,9 +69,7 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
                 try self.beginRecording(call)
                 call.resolve()
             } catch {
-                self.resetRecorder(deleteFile: true)
-                // Nothing records: give the session back, so other audio is not left behind it.
-                try? self.deactivateSessionIfNeeded()
+                self.handleFailedStart()
                 call.reject("Failed to start recording.", nil, error)
             }
         }
@@ -587,9 +585,7 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
             resetRecorder(deleteFile: false)
         } catch {
             if let fallbackURL = AudioSegmentMerger.preferredFallbackSegment(from: segments) {
-                let duration = recordingFileExtension == "aac"
-                    ? Self.preciseDurationMilliseconds(for: fallbackURL)
-                    : AudioSegmentMerger.durationMilliseconds(for: fallbackURL)
+                let duration = Self.fallbackDurationMilliseconds(for: fallbackURL, fileExtension: recordingFileExtension)
                 // Every segment stays on disk; `segments` names them in recording order, so the
                 // caller can still join them instead of keeping only the fallback.
                 let result: [String: Any] = [
@@ -636,7 +632,7 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
     /// The result is named `<uuid>-joined.aac`, so whoever finds it next to segments that were not
     /// deleted yet (the app ended in between) knows it already holds them.
     private func appendAdtsSegments(_ segments: [URL]) throws -> (URL, Double) {
-        let withAudio = segments.filter { fileByteCount($0) != 0 }
+        let withAudio = Self.segmentsToJoin(segments)
         guard !withAudio.isEmpty else {
             throw AudioSegmentMergerError.noAudioInSegment(segments.first ?? FileManager.default.temporaryDirectory)
         }
@@ -646,28 +642,43 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         }
         let outputURL = try recordingDirectoryURL().appendingPathComponent("\(UUID().uuidString)-joined.aac")
         // Without room for the copy this throws, and every segment stays (mergeFailed + segments).
-        let written = try AdtsSegmentAppender.append(withAudio, into: outputURL)
-        guard written > 0 else {
-            // Not one whole frame in any segment: an empty file is no recording, keep the segments.
-            try? FileManager.default.removeItem(at: outputURL)
-            throw AudioSegmentMergerError.noAudioInSegment(withAudio[0])
-        }
+        // Not one whole frame in any segment also throws (noWholeFrame): the segments stay.
+        try AdtsSegmentAppender.append(withAudio, into: outputURL)
         deleteRecordingFiles(at: segments)
         return (outputURL, Self.preciseDurationMilliseconds(for: outputURL))
     }
 
+    /// Nothing records after a failed start: the recorder is reset and the session given back, so
+    /// other audio is not left behind it.
+    func handleFailedStart() {
+        resetRecorder(deleteFile: true)
+        try? deactivateSession()
+    }
+
+    /// Gives the audio session back. A seam for tests, which check that a failed start calls it.
+    lazy var deactivateSession: () throws -> Void = { [unowned self] in try self.deactivateSessionIfNeeded() }
+
+    /// The segments that go to the join: all but the ones known to be empty. A segment whose size
+    /// cannot be read is not known to be empty, so it goes along, and the join fails closed on it.
+    static func segmentsToJoin(_ segments: [URL]) -> [URL] {
+        segments.filter { url in
+            let size = try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64
+            return size != 0
+        }
+    }
+
+    /// The duration reported with `mergeFailed`: precise for ADTS, which has no index.
+    static func fallbackDurationMilliseconds(for url: URL, fileExtension: String) -> Double {
+        fileExtension == "aac" ? preciseDurationMilliseconds(for: url) : AudioSegmentMerger.durationMilliseconds(for: url)
+    }
+
     /// ADTS has no index; without this option AVFoundation estimates the length from the bitrate
     /// of the first frames. With it, the file is read to the end and the length is exact.
-    private static func preciseDurationMilliseconds(for url: URL) -> Double {
+    static func preciseDurationMilliseconds(for url: URL) -> Double {
         let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
         let seconds = CMTimeGetSeconds(asset.duration)
         guard seconds.isFinite, seconds > 0 else { return 0 }
         return seconds * 1000
-    }
-
-    /// `nil` when the size cannot be read (the file is missing or unreadable).
-    private func fileByteCount(_ url: URL) -> Int64? {
-        try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64
     }
 
     private func deleteRecordingFiles(at urls: [URL]) {

@@ -286,18 +286,25 @@ public class CapacitorAudioRecorderPlugin extends com.getcapacitor.Plugin {
             outputDirectory.mkdirs();
         }
 
-        // The timestamp alone repeats within a second: a stop and a new start in the same second
-        // would write over the recording that was just handed back.
-        String fileName =
+        outputFile = new File(outputDirectory, recordingFileName(new Date(), format));
+        mediaRecorder.setOutputFile(outputFile.getAbsolutePath());
+        mediaRecorder.prepare();
+    }
+
+    /**
+     * `recording-<yyyyMMdd-HHmmss>-<uuid>.<ext>`: the time says when it began, and the UUID keeps
+     * two starts in the same second apart, so a new recording never writes over the one just
+     * handed back.
+     */
+    static String recordingFileName(Date startedAt, String format) {
+        return (
             "recording-" +
-            new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date()) +
+            new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(startedAt) +
             "-" +
             UUID.randomUUID() +
             "." +
-            fileExtensionFor(format);
-        outputFile = new File(outputDirectory, fileName);
-        mediaRecorder.setOutputFile(outputFile.getAbsolutePath());
-        mediaRecorder.prepare();
+            fileExtensionFor(format)
+        );
     }
 
     private void releaseRecorder() {

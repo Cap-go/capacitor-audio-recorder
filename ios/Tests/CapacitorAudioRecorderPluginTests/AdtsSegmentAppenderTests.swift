@@ -12,6 +12,7 @@ final class AdtsSegmentAppenderTests: XCTestCase {
     }
 
     override func tearDownWithError() throws {
+        AdtsSegmentAppender.flush = AdtsSegmentAppender.flushToStorage
         try? FileManager.default.removeItem(at: directory)
     }
 
@@ -82,6 +83,58 @@ final class AdtsSegmentAppenderTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: output), try bytes.prefix(frames[lastWhole]) + Data(contentsOf: second))
     }
 
+    /// Segments that end before their first frame is whole: an empty file is no recording.
+    func testAppend_notOneWholeFrameIsAFailureAndTheSegmentsStay() throws {
+        let bytes = try Data(contentsOf: try writeTone(named: "whole.aac", seconds: 1.0))
+        let frames = adtsFrameOffsets(bytes)
+        let cut = directory.appendingPathComponent("cut.aac")
+        try bytes.prefix(frames[1] - 3).write(to: cut)
+        let output = directory.appendingPathComponent("joined.aac")
+
+        XCTAssertThrowsError(try AdtsSegmentAppender.append([cut, cut], into: output)) { error in
+            XCTAssertEqual(error as? AdtsSegmentAppenderError, .noWholeFrame)
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.appendingPathExtension("appending").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: cut.path))
+    }
+
+    /// The segments may only go once the joined file is on storage: a flush that fails is a failed
+    /// join, with no joined file left behind.
+    func testAppend_aFlushThatFailsLeavesNoJoinedFile() throws {
+        let first = try writeTone(named: "first.aac", seconds: 0.5)
+        let second = try writeTone(named: "second.aac", seconds: 0.5)
+        let output = directory.appendingPathComponent("joined.aac")
+        AdtsSegmentAppender.flush = { _ in false }
+
+        XCTAssertThrowsError(try AdtsSegmentAppender.append([first, second], into: output))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.appendingPathExtension("appending").path))
+    }
+
+    func testFlushToStorage_flushesARealFileAndRefusesABadDescriptor() throws {
+        let file = try writeTone(named: "flush.aac", seconds: 0.2)
+        let handle = try FileHandle(forWritingTo: file)
+        defer { try? handle.close() }
+        XCTAssertTrue(AdtsSegmentAppender.flushToStorage(handle.fileDescriptor))
+        XCTAssertFalse(AdtsSegmentAppender.flushToStorage(-1))
+    }
+
+    /// The duration reported with mergeFailed: ADTS has no index, so with a variable bit rate and a
+    /// quiet start an estimate from the first frames is wrong. The precise read counts the whole file.
+    func testFallbackDuration_ofAnAacSegmentIsItsLength() throws {
+        let segment = try writeSamples(named: "segment.aac", seconds: 20.0, variableBitRate: true) { index in
+            index < 5 * 44_100 ? 0 : Float.random(in: -0.5...0.5)
+        }
+        let plays = decodedSeconds(segment) * 1000
+
+        let duration = CapacitorAudioRecorderPlugin.fallbackDurationMilliseconds(for: segment, fileExtension: "aac")
+
+        // Within three frames: the precise read leaves out the encoder's priming (2112 samples, 48 ms),
+        // which the decoder still hands out. The estimate is 4 s off here (24.5 s for 20 s).
+        XCTAssertEqual(duration, plays, accuracy: 3 * 1024 / 44.1)
+    }
+
     func testAppend_failsClosedOnASegmentThatIsNotAdts() throws {
         let first = try writeTone(named: "first.aac", seconds: 0.5)
         let mpeg4 = try writeTone(named: "other.m4a", seconds: 0.5)
@@ -141,20 +194,31 @@ final class AdtsSegmentAppenderTests: XCTestCase {
     // MARK: - Helpers
 
     /// AVFoundation picks the container from the extension: `.aac` writes ADTS, `.m4a` MPEG-4.
-    private func writeTone(named name: String, seconds: Double) throws -> URL {
+    private func writeTone(named name: String, seconds: Double, amplitude: Double = 0.3) throws -> URL {
+        try writeSamples(named: name, seconds: seconds) { index in Float(sin(Double(index) * 2 * .pi * 440 / 44_100) * amplitude) }
+    }
+
+    private func writeNoise(named name: String, seconds: Double) throws -> URL {
+        try writeSamples(named: name, seconds: seconds) { _ in Float.random(in: -0.5...0.5) }
+    }
+
+    private func writeSamples(named name: String, seconds: Double, variableBitRate: Bool = false, sample: (Int) -> Float) throws -> URL {
         let url = directory.appendingPathComponent(name)
-        let settings: [String: Any] = [
+        var settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
             AVSampleRateKey: 44_100,
             AVNumberOfChannelsKey: 1
         ]
+        if variableBitRate {
+            settings[AVEncoderBitRateStrategyKey] = AVAudioBitRateStrategy_Variable
+        }
         let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)!
         let frames = AVAudioFrameCount(seconds * 44_100)
         let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames)!
         buffer.frameLength = frames
         let samples = buffer.floatChannelData![0]
         for index in 0..<Int(frames) {
-            samples[index] = Float(sin(Double(index) * 2 * .pi * 440 / 44_100) * 0.3)
+            samples[index] = sample(index)
         }
         let file = try AVAudioFile(forWriting: url, settings: settings)
         try file.write(from: buffer)
