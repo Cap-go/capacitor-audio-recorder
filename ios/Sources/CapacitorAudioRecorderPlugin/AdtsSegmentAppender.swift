@@ -149,19 +149,27 @@ enum AdtsSegmentAppender {
     }
 
     private static func synchronizeAndClose(_ handle: FileHandle) throws {
+        guard flushToStorage(handle.fileDescriptor) else {
+            try? handle.close()
+            throw AdtsSegmentAppenderError.writeFailed("Could not flush the joined file to storage.")
+        }
         do {
-            try handle.synchronize()
             try handle.close()
         } catch {
-            try? handle.close()
             throw AdtsSegmentAppenderError.writeFailed(error.localizedDescription)
         }
+    }
+
+    /// `fsync` leaves the data in the drive's own cache on Apple platforms; `F_FULLFSYNC` empties
+    /// it. A file system without `F_FULLFSYNC` falls back to `fsync`.
+    private static func flushToStorage(_ descriptor: Int32) -> Bool {
+        fcntl(descriptor, F_FULLFSYNC) == 0 || fsync(descriptor) == 0
     }
 
     /// Flushes the directory entry, so the rename itself survives a power loss.
     private static func synchronizeDirectory(of url: URL) throws {
         let descriptor = open(url.deletingLastPathComponent().path, O_RDONLY)
-        guard descriptor >= 0, fsync(descriptor) == 0 else {
+        guard descriptor >= 0, flushToStorage(descriptor) else {
             if descriptor >= 0 { Darwin.close(descriptor) }
             throw AdtsSegmentAppenderError.writeFailed("Could not flush the directory of \(url.lastPathComponent).")
         }

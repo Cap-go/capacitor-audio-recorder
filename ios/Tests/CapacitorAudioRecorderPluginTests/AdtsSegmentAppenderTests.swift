@@ -64,6 +64,24 @@ final class AdtsSegmentAppenderTests: XCTestCase {
         }
     }
 
+    /// A segment longer than one read chunk (1 MiB): frames that straddle a chunk boundary are
+    /// carried over, and the cut at the end is still found.
+    func testAppend_aLongSegmentIsScannedAcrossChunks() throws {
+        let long = try writeTone(named: "long.aac", seconds: 200.0)
+        let bytes = try Data(contentsOf: long)
+        XCTAssertGreaterThan(bytes.count, 1 << 20)
+        let frames = adtsFrameOffsets(bytes)
+        let lastWhole = frames.count - 2
+        let cut = directory.appendingPathComponent("long-cut.aac")
+        try bytes.prefix(frames[lastWhole] + 20).write(to: cut)
+        let second = try writeTone(named: "second.aac", seconds: 1.0)
+        let output = directory.appendingPathComponent("joined.aac")
+
+        try AdtsSegmentAppender.append([cut, second], into: output)
+
+        XCTAssertEqual(try Data(contentsOf: output), try bytes.prefix(frames[lastWhole]) + Data(contentsOf: second))
+    }
+
     func testAppend_failsClosedOnASegmentThatIsNotAdts() throws {
         let first = try writeTone(named: "first.aac", seconds: 0.5)
         let mpeg4 = try writeTone(named: "other.m4a", seconds: 0.5)
