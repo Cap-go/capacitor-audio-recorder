@@ -646,7 +646,12 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
         }
         let outputURL = try recordingDirectoryURL().appendingPathComponent("\(UUID().uuidString)-joined.aac")
         // Without room for the copy this throws, and every segment stays (mergeFailed + segments).
-        try AdtsSegmentAppender.append(withAudio, into: outputURL)
+        let written = try AdtsSegmentAppender.append(withAudio, into: outputURL)
+        guard written > 0 else {
+            // Not one whole frame in any segment: an empty file is no recording, keep the segments.
+            try? FileManager.default.removeItem(at: outputURL)
+            throw AudioSegmentMergerError.noAudioInSegment(withAudio[0])
+        }
         deleteRecordingFiles(at: segments)
         return (outputURL, Self.preciseDurationMilliseconds(for: outputURL))
     }

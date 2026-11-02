@@ -61,7 +61,13 @@ enum AdtsSegmentAppender {
             try? fileManager.removeItem(at: tempURL)
             throw AdtsSegmentAppenderError.renameFailed(error.localizedDescription)
         }
-        try synchronizeDirectory(of: outputURL)
+        do {
+            try synchronizeDirectory(of: outputURL)
+        } catch {
+            // Not durable, so not done: the segments stay, and no joined copy is left beside them.
+            try? fileManager.removeItem(at: outputURL)
+            throw error
+        }
         return written
     }
 
@@ -102,31 +108,44 @@ enum AdtsSegmentAppender {
     }
 
     /// The length of a segment up to the end of its last whole ADTS frame. Each frame starts with a
-    /// 12-bit sync word and carries its own length (13 bits, header included).
+    /// 12-bit sync word and carries its own length (13 bits, header included). Read in chunks, so a
+    /// long recording costs a few reads, not one per frame.
     static func wholeFramesLength(of input: FileHandle, segment: URL) throws -> UInt64 {
         do {
-            let size = try input.seekToEnd()
-            var position: UInt64 = 0
-            while position + 7 <= size {
-                try input.seek(toOffset: position)
-                guard let data = try input.read(upToCount: 7), data.count == 7 else {
-                    throw AdtsSegmentAppenderError.segmentUnreadable(segment)
-                }
-                let header = [UInt8](data)
-                guard header[0] == 0xFF, header[1] & 0xF6 == 0xF0 else {
-                    throw AdtsSegmentAppenderError.notAdts(segment)
-                }
-                let frameLength = (UInt64(header[3] & 0x03) << 11) | (UInt64(header[4]) << 3) | (UInt64(header[5]) >> 5)
-                guard frameLength >= 7 else { throw AdtsSegmentAppenderError.notAdts(segment) }
-                if position + frameLength > size { break }
-                position += frameLength
+            try input.seek(toOffset: 0)
+            var whole: UInt64 = 0
+            var pending = Data()
+            while true {
+                let chunk = try autoreleasepool { try input.read(upToCount: chunkSize) } ?? Data()
+                if chunk.isEmpty { break }
+                pending.append(chunk)
+                let consumed = try wholeFrames(in: pending, segment: segment)
+                whole += UInt64(consumed)
+                pending = Data(pending.dropFirst(consumed))
             }
-            return position
+            return whole
         } catch let error as AdtsSegmentAppenderError {
             throw error
         } catch {
             throw AdtsSegmentAppenderError.segmentUnreadable(segment)
         }
+    }
+
+    /// The bytes of the whole frames at the start of `data`; a frame that is not complete yet is left
+    /// for the next chunk (or, at the end of the file, left out).
+    private static func wholeFrames(in data: Data, segment: URL) throws -> Int {
+        let bytes = [UInt8](data)
+        var position = 0
+        while position + 7 <= bytes.count {
+            guard bytes[position] == 0xFF, bytes[position + 1] & 0xF6 == 0xF0 else {
+                throw AdtsSegmentAppenderError.notAdts(segment)
+            }
+            let frameLength = (Int(bytes[position + 3] & 0x03) << 11) | (Int(bytes[position + 4]) << 3) | (Int(bytes[position + 5]) >> 5)
+            guard frameLength >= 7 else { throw AdtsSegmentAppenderError.notAdts(segment) }
+            if position + frameLength > bytes.count { break }
+            position += frameLength
+        }
+        return position
     }
 
     private static func synchronizeAndClose(_ handle: FileHandle) throws {
