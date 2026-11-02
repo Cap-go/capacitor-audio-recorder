@@ -29,10 +29,6 @@ enum AdtsSegmentAppenderError: Error, Equatable {
 /// recording; without it the join fails and the segments stay, for the caller to join later.
 enum AdtsSegmentAppender {
     private static let chunkSize = 1 << 20
-    /// Flushes a file descriptor to storage. A seam for tests, which make it fail.
-    static var flush: (Int32) -> Bool = flushToStorage
-    /// Opens the temp file for writing. A seam for tests, which make it fail.
-    static var openForWriting: (URL) -> FileHandle? = { try? FileHandle(forWritingTo: $0) }
 
     /// The segments that go to the join: all but the ones known to be empty (an interruption that
     /// began before the first frame). A segment whose size cannot be read is not known to be empty,
@@ -56,8 +52,14 @@ enum AdtsSegmentAppender {
         try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64
     }
 
+    /// `flush` and `openForWriting` are there for tests, which make them fail; callers leave them.
     @discardableResult
-    static func append(_ segments: [URL], into outputURL: URL) throws -> UInt64 {
+    static func append(
+        _ segments: [URL],
+        into outputURL: URL,
+        flush: (Int32) -> Bool = flushToStorage,
+        openForWriting: (URL) -> FileHandle? = { try? FileHandle(forWritingTo: $0) }
+    ) throws -> UInt64 {
         guard !segments.isEmpty else { throw AdtsSegmentAppenderError.noSegments }
         let fileManager = FileManager.default
         let tempURL = outputURL.appendingPathExtension("appending")
@@ -77,7 +79,7 @@ enum AdtsSegmentAppender {
             }
             // An empty file is no recording.
             guard written > 0 else { throw AdtsSegmentAppenderError.noWholeFrame }
-            try synchronizeAndClose(output)
+            try synchronizeAndClose(output, flush: flush)
         } catch {
             try? output.close()
             try? fileManager.removeItem(at: tempURL)
@@ -92,7 +94,7 @@ enum AdtsSegmentAppender {
             throw AdtsSegmentAppenderError.renameFailed(error.localizedDescription)
         }
         do {
-            try synchronizeDirectory(of: outputURL)
+            try synchronizeDirectory(of: outputURL, flush: flush)
         } catch {
             // Not durable, so not done: the segments stay, and no joined copy is left beside them.
             try? fileManager.removeItem(at: outputURL)
@@ -178,7 +180,7 @@ enum AdtsSegmentAppender {
         return position
     }
 
-    private static func synchronizeAndClose(_ handle: FileHandle) throws {
+    private static func synchronizeAndClose(_ handle: FileHandle, flush: (Int32) -> Bool) throws {
         guard flush(handle.fileDescriptor) else {
             try? handle.close()
             throw AdtsSegmentAppenderError.writeFailed("Could not flush the joined file to storage.")
@@ -197,7 +199,7 @@ enum AdtsSegmentAppender {
     }
 
     /// Flushes the directory entry, so the rename itself survives a power loss.
-    private static func synchronizeDirectory(of url: URL) throws {
+    private static func synchronizeDirectory(of url: URL, flush: (Int32) -> Bool) throws {
         let descriptor = open(url.deletingLastPathComponent().path, O_RDONLY)
         guard descriptor >= 0, flush(descriptor) else {
             if descriptor >= 0 { Darwin.close(descriptor) }

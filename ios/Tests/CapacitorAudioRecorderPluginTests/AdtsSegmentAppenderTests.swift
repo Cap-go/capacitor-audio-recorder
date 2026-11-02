@@ -12,8 +12,6 @@ final class AdtsSegmentAppenderTests: XCTestCase {
     }
 
     override func tearDownWithError() throws {
-        AdtsSegmentAppender.flush = AdtsSegmentAppender.flushToStorage
-        AdtsSegmentAppender.openForWriting = { try? FileHandle(forWritingTo: $0) }
         try? FileManager.default.removeItem(at: directory)
     }
 
@@ -106,9 +104,7 @@ final class AdtsSegmentAppenderTests: XCTestCase {
         let first = try writeTone(named: "first.aac", seconds: 0.5)
         let second = try writeTone(named: "second.aac", seconds: 0.5)
         let output = directory.appendingPathComponent("joined.aac")
-        AdtsSegmentAppender.flush = { _ in false }
-
-        XCTAssertThrowsError(try AdtsSegmentAppender.append([first, second], into: output))
+        XCTAssertThrowsError(try AdtsSegmentAppender.append([first, second], into: output, flush: { _ in false }))
         XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: output.appendingPathExtension("appending").path))
     }
@@ -120,12 +116,12 @@ final class AdtsSegmentAppenderTests: XCTestCase {
         let second = try writeTone(named: "second.aac", seconds: 0.5)
         let output = directory.appendingPathComponent("joined.aac")
         var flushes = 0
-        AdtsSegmentAppender.flush = { _ in
+        let failsSecond: (Int32) -> Bool = { _ in
             flushes += 1
             return flushes == 1
         }
 
-        XCTAssertThrowsError(try AdtsSegmentAppender.append([first, second], into: output))
+        XCTAssertThrowsError(try AdtsSegmentAppender.append([first, second], into: output, flush: failsSecond))
         XCTAssertEqual(flushes, 2)
         XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: first.path))
@@ -135,9 +131,7 @@ final class AdtsSegmentAppenderTests: XCTestCase {
     func testAppend_aTempFileThatCannotBeOpenedIsRemoved() throws {
         let first = try writeTone(named: "first.aac", seconds: 0.5)
         let output = directory.appendingPathComponent("joined.aac")
-        AdtsSegmentAppender.openForWriting = { _ in nil }
-
-        XCTAssertThrowsError(try AdtsSegmentAppender.append([first], into: output))
+        XCTAssertThrowsError(try AdtsSegmentAppender.append([first], into: output, openForWriting: { _ in nil }))
         XCTAssertFalse(FileManager.default.fileExists(atPath: output.appendingPathExtension("appending").path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
     }
