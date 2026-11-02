@@ -34,6 +34,28 @@ enum AdtsSegmentAppender {
     /// Opens the temp file for writing. A seam for tests, which make it fail.
     static var openForWriting: (URL) -> FileHandle? = { try? FileHandle(forWritingTo: $0) }
 
+    /// The segments that go to the join: all but the ones known to be empty (an interruption that
+    /// began before the first frame). A segment whose size cannot be read is not known to be empty,
+    /// so it goes along, and the join fails closed on it instead of dropping it.
+    static func segmentsToJoin(_ segments: [URL]) -> [URL] {
+        segments.filter { byteCount(of: $0) != 0 }
+    }
+
+    /// The one segment that is the whole recording, when only one is left to join; `nil` when there
+    /// are more. A sole segment whose size cannot be read (missing, unreadable) is no recording: it
+    /// throws, so the caller keeps every segment instead of handing over nothing.
+    static func soleRecording(in segments: [URL]) throws -> URL? {
+        guard segments.count == 1 else { return nil }
+        guard let size = byteCount(of: segments[0]), size > 0 else {
+            throw AdtsSegmentAppenderError.segmentUnreadable(segments[0])
+        }
+        return segments[0]
+    }
+
+    private static func byteCount(of url: URL) -> Int64? {
+        try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64
+    }
+
     @discardableResult
     static func append(_ segments: [URL], into outputURL: URL) throws -> UInt64 {
         guard !segments.isEmpty else { throw AdtsSegmentAppenderError.noSegments }

@@ -632,11 +632,11 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
     /// The result is named `<uuid>-joined.aac`, so whoever finds it next to segments that were not
     /// deleted yet (the app ended in between) knows it already holds them.
     private func appendAdtsSegments(_ segments: [URL]) throws -> (URL, Double) {
-        let withAudio = Self.segmentsToJoin(segments)
+        let withAudio = AdtsSegmentAppender.segmentsToJoin(segments)
         guard !withAudio.isEmpty else {
             throw AudioSegmentMergerError.noAudioInSegment(segments.first ?? FileManager.default.temporaryDirectory)
         }
-        if let sole = try Self.soleRecording(in: withAudio) {
+        if let sole = try AdtsSegmentAppender.soleRecording(in: withAudio) {
             deleteRecordingFiles(at: segments.filter { $0 != sole })
             return (sole, Self.preciseDurationMilliseconds(for: sole))
         }
@@ -657,26 +657,6 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
 
     /// Gives the audio session back. A seam for tests, which check that a failed start calls it.
     lazy var deactivateSession: () throws -> Void = { [unowned self] in try self.deactivateSessionIfNeeded() }
-
-    /// The segments that go to the join: all but the ones known to be empty. A segment whose size
-    /// cannot be read is not known to be empty, so it goes along, and the join fails closed on it.
-    static func segmentsToJoin(_ segments: [URL]) -> [URL] {
-        segments.filter { url in
-            let size = try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64
-            return size != 0
-        }
-    }
-
-    /// The one segment that is the whole recording, when only one is left to join; `nil` when there
-    /// are more. A sole segment whose size cannot be read (missing, unreadable) is no recording: it
-    /// throws, so the stop falls back to `mergeFailed` and the segments stay.
-    static func soleRecording(in segments: [URL]) throws -> URL? {
-        guard segments.count == 1 else { return nil }
-        let url = segments[0]
-        let size = try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64
-        guard let size, size > 0 else { throw AudioSegmentMergerError.noAudioInSegment(url) }
-        return url
-    }
 
     /// The duration reported with `mergeFailed`: precise for ADTS, which has no index.
     static func fallbackDurationMilliseconds(for url: URL, fileExtension: String) -> Double {
