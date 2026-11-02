@@ -89,12 +89,16 @@ enum AudioSegmentMerger {
     }
 
     /// Picks the segment with the longest measured duration, falling back to largest file size.
-    static func preferredFallbackSegment(from segmentURLs: [URL]) -> URL? {
+    /// The longest segment by `duration`, or the largest file when none has a readable duration.
+    static func preferredFallbackSegment(
+        from segmentURLs: [URL],
+        duration: (URL) -> Double = { durationMilliseconds(for: $0) }
+    ) -> URL? {
         let candidates = usableSegments(from: segmentURLs)
         if candidates.isEmpty {
             return segmentURLs.max(by: { fileByteCount($0) < fileByteCount($1) })
         }
-        return candidates.max(by: { durationMilliseconds(for: $0) < durationMilliseconds(for: $1) })
+        return candidates.max(by: { duration($0) < duration($1) })
     }
 
     static func usableSegments(from segmentURLs: [URL]) -> [URL] {

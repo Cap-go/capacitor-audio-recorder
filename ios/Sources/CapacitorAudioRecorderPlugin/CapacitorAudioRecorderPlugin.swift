@@ -584,7 +584,7 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
             call.resolve(result)
             resetRecorder(deleteFile: false)
         } catch {
-            if let fallbackURL = AudioSegmentMerger.preferredFallbackSegment(from: segments) {
+            if let fallbackURL = Self.fallbackSegment(from: segments, fileExtension: recordingFileExtension) {
                 let duration = Self.fallbackDurationMilliseconds(for: fallbackURL, fileExtension: recordingFileExtension)
                 // Every segment stays on disk; `segments` names them in recording order, so the
                 // caller can still join them instead of keeping only the fallback.
@@ -657,6 +657,14 @@ public class CapacitorAudioRecorderPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioR
 
     /// Gives the audio session back. A seam for tests, which check that a failed start calls it.
     lazy var deactivateSession: () throws -> Void = { [unowned self] in try self.deactivateSessionIfNeeded() }
+
+    /// The segment `uri` points to with `mergeFailed`: the longest, ranked by the same duration that
+    /// is reported, so an estimate from the first frames of an ADTS segment cannot pick a shorter one.
+    static func fallbackSegment(from segments: [URL], fileExtension: String) -> URL? {
+        AudioSegmentMerger.preferredFallbackSegment(from: segments) {
+            fallbackDurationMilliseconds(for: $0, fileExtension: fileExtension)
+        }
+    }
 
     /// The duration reported with `mergeFailed`: precise for ADTS, which has no index.
     static func fallbackDurationMilliseconds(for url: URL, fileExtension: String) -> Double {

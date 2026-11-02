@@ -125,6 +125,7 @@ final class AdtsSegmentAppenderTests: XCTestCase {
         XCTAssertEqual(flushes, 2)
         XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: first.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: second.path))
     }
 
     /// The temp file was made but cannot be opened: it is removed again, not left beside the output.
@@ -151,19 +152,23 @@ final class AdtsSegmentAppenderTests: XCTestCase {
         XCTAssertEqual(AdtsSegmentAppender.segmentsToJoin([withAudio, empty, missing]), [withAudio, missing])
     }
 
-    /// One segment left is the recording only if it can be read; an unreadable one is a failure,
-    /// not a recording of nothing that costs the other segments.
-    func testSoleRecording_isOnlyASegmentThatCanBeRead() throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("sole-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let withAudio = directory.appendingPathComponent("a.aac")
-        try Data([0xFF, 0xF1, 0x50]).write(to: withAudio)
+    /// One segment left is the recording only if it can be read and holds a whole frame; otherwise
+    /// it is a failure, as in the join of several, not a recording of nothing that costs the others.
+    func testSoleRecording_isOnlyASegmentWithAWholeFrame() throws {
+        let withAudio = try writeTone(named: "a.aac", seconds: 0.5)
         let missing = directory.appendingPathComponent("b.aac")
+        let bytes = try Data(contentsOf: withAudio)
+        let halfAFrame = directory.appendingPathComponent("c.aac")
+        try bytes.prefix(adtsFrameOffsets(bytes)[1] - 3).write(to: halfAFrame)
 
         XCTAssertEqual(try AdtsSegmentAppender.soleRecording(in: [withAudio]), withAudio)
         XCTAssertNil(try AdtsSegmentAppender.soleRecording(in: [withAudio, missing]))
-        XCTAssertThrowsError(try AdtsSegmentAppender.soleRecording(in: [missing]))
+        XCTAssertThrowsError(try AdtsSegmentAppender.soleRecording(in: [missing])) { error in
+            XCTAssertEqual(error as? AdtsSegmentAppenderError, .segmentUnreadable(missing))
+        }
+        XCTAssertThrowsError(try AdtsSegmentAppender.soleRecording(in: [halfAFrame])) { error in
+            XCTAssertEqual(error as? AdtsSegmentAppenderError, .noWholeFrame)
+        }
     }
 
     func testFlushToStorage_flushesARealFileAndRefusesABadDescriptor() throws {
@@ -172,6 +177,56 @@ final class AdtsSegmentAppenderTests: XCTestCase {
         defer { try? handle.close() }
         XCTAssertTrue(AdtsSegmentAppender.flushToStorage(handle.fileDescriptor))
         XCTAssertFalse(AdtsSegmentAppender.flushToStorage(-1))
+    }
+
+    /// `fsync` stands in for `F_FULLFSYNC` only on a file system without it; after an I/O error the
+    /// data may not be on storage, so the flush fails and the segments stay.
+    func testFlushToStorage_fallsBackToFsyncOnlyWhereFullFsyncIsUnsupported() {
+        var plainSyncs = 0
+        let plainSync: (Int32) -> Int32 = { _ in
+            plainSyncs += 1
+            return 0
+        }
+        let unsupported: (Int32) -> Int32 = { _ in
+            errno = ENOTSUP
+            return -1
+        }
+        let ioError: (Int32) -> Int32 = { _ in
+            errno = EIO
+            return -1
+        }
+
+        XCTAssertTrue(AdtsSegmentAppender.flushToStorage(3, fullSync: unsupported, plainSync: plainSync))
+        XCTAssertFalse(AdtsSegmentAppender.flushToStorage(3, fullSync: ioError, plainSync: plainSync))
+        XCTAssertEqual(plainSyncs, 1)
+    }
+
+    /// A header with a CRC is 9 bytes: one that claims a frame of 8 bytes is not ADTS, and is not
+    /// copied into the join.
+    func testAppend_aCrcHeaderShorterThanNineBytesIsNotAdts() throws {
+        let crc = directory.appendingPathComponent("crc.aac")
+        try Data([0xFF, 0xF0, 0x50, 0x80, 0x01, 0x1F, 0xFC, 0x00, 0x00]).write(to: crc)
+        let output = directory.appendingPathComponent("joined.aac")
+
+        XCTAssertThrowsError(try AdtsSegmentAppender.append([crc, crc], into: output)) { error in
+            XCTAssertEqual(error as? AdtsSegmentAppenderError, .notAdts(crc))
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
+    }
+
+    /// With mergeFailed, `uri` points to the longest segment by the reported (precise) duration. The
+    /// estimate from the first frames makes a segment with a quiet start look longer than it is.
+    func testFallbackSegment_ofAacSegmentsIsTheLongestByPreciseDuration() throws {
+        let quietStart = try writeSamples(named: "quiet.aac", seconds: 20.0, variableBitRate: true) { index in
+            index < 5 * 44_100 ? 0 : Float.random(in: -0.5...0.5)
+        }
+        let longer = try writeSamples(named: "longer.aac", seconds: 22.0, variableBitRate: true) { _ in
+            Float.random(in: -0.5...0.5)
+        }
+
+        let fallback = CapacitorAudioRecorderPlugin.fallbackSegment(from: [quietStart, longer], fileExtension: "aac")
+
+        XCTAssertEqual(fallback, longer)
     }
 
     /// The duration reported with mergeFailed: ADTS has no index, so with a variable bit rate and a

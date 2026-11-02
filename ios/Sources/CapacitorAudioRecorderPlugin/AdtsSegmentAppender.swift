@@ -38,14 +38,21 @@ enum AdtsSegmentAppender {
     }
 
     /// The one segment that is the whole recording, when only one is left to join; `nil` when there
-    /// are more. A sole segment whose size cannot be read (missing, unreadable) is no recording: it
-    /// throws, so the caller keeps every segment instead of handing over nothing.
+    /// are more. A sole segment that cannot be read (missing, unreadable), is not ADTS, or holds not
+    /// one whole frame is no recording: it throws, as the join of several segments does, so the
+    /// caller keeps every segment instead of handing over nothing.
     static func soleRecording(in segments: [URL]) throws -> URL? {
         guard segments.count == 1 else { return nil }
-        guard let size = byteCount(of: segments[0]), size > 0 else {
-            throw AdtsSegmentAppenderError.segmentUnreadable(segments[0])
+        let segment = segments[0]
+        guard let size = byteCount(of: segment), size > 0,
+              let input = try? FileHandle(forReadingFrom: segment) else {
+            throw AdtsSegmentAppenderError.segmentUnreadable(segment)
         }
-        return segments[0]
+        defer { try? input.close() }
+        guard try wholeFramesLength(of: input, segment: segment) > 0 else {
+            throw AdtsSegmentAppenderError.noWholeFrame
+        }
+        return segment
     }
 
     private static func byteCount(of url: URL) -> Int64? {
@@ -57,7 +64,7 @@ enum AdtsSegmentAppender {
     static func append(
         _ segments: [URL],
         into outputURL: URL,
-        flush: (Int32) -> Bool = flushToStorage,
+        flush: (Int32) -> Bool = { flushToStorage($0) },
         openForWriting: (URL) -> FileHandle? = { try? FileHandle(forWritingTo: $0) }
     ) throws -> UInt64 {
         guard !segments.isEmpty else { throw AdtsSegmentAppenderError.noSegments }
@@ -173,7 +180,9 @@ enum AdtsSegmentAppender {
                 throw AdtsSegmentAppenderError.notAdts(segment)
             }
             let frameLength = (Int(bytes[position + 3] & 0x03) << 11) | (Int(bytes[position + 4]) << 3) | (Int(bytes[position + 5]) >> 5)
-            guard frameLength >= 7 else { throw AdtsSegmentAppenderError.notAdts(segment) }
+            // The header is 7 bytes, or 9 with a CRC (protection_absent is 0): a shorter frame is none.
+            let headerLength = bytes[position + 1] & 0x01 == 1 ? 7 : 9
+            guard frameLength >= headerLength else { throw AdtsSegmentAppenderError.notAdts(segment) }
             if position + frameLength > bytes.count { break }
             position += frameLength
         }
@@ -193,9 +202,17 @@ enum AdtsSegmentAppender {
     }
 
     /// `fsync` leaves the data in the drive's own cache on Apple platforms; `F_FULLFSYNC` empties
-    /// it. A file system without `F_FULLFSYNC` falls back to `fsync`.
-    static func flushToStorage(_ descriptor: Int32) -> Bool {
-        fcntl(descriptor, F_FULLFSYNC) == 0 || fsync(descriptor) == 0
+    /// it. Only a file system that does not support `F_FULLFSYNC` falls back to `fsync`; any other
+    /// failure (an I/O error) is a failed flush, so the segments stay. `fullSync` and `plainSync`
+    /// are there for tests; callers leave them.
+    static func flushToStorage(
+        _ descriptor: Int32,
+        fullSync: (Int32) -> Int32 = { fcntl($0, F_FULLFSYNC) },
+        plainSync: (Int32) -> Int32 = { fsync($0) }
+    ) -> Bool {
+        if fullSync(descriptor) == 0 { return true }
+        guard [ENOTSUP, ENOTTY, EINVAL].contains(errno) else { return false }
+        return plainSync(descriptor) == 0
     }
 
     /// Flushes the directory entry, so the rename itself survives a power loss.
