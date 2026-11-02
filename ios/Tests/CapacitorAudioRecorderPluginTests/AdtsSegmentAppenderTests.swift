@@ -42,6 +42,37 @@ final class AdtsSegmentAppenderTests: XCTestCase {
         XCTAssertEqual(decodedSeconds(output), decodedSeconds(first) + decodedSeconds(second), accuracy: 0.05)
     }
 
+    /// A segment that ends inside a frame: copied as is, that frame would swallow the start of the
+    /// next segment and AVFoundation would stop decoding there. Only its whole frames are joined.
+    func testAppend_aSegmentCutInsideAFrameKeepsTheNextSegment() throws {
+        let whole = try writeTone(named: "whole.aac", seconds: 2.0)
+        let bytes = try Data(contentsOf: whole)
+        let frames = adtsFrameOffsets(bytes)
+        let lastWhole = frames.count / 2
+        let cut = directory.appendingPathComponent("cut.aac")
+        try bytes.prefix(frames[lastWhole] + 5).write(to: cut)
+        let second = try writeTone(named: "second.aac", seconds: 2.0)
+        let output = directory.appendingPathComponent("joined.aac")
+
+        try AdtsSegmentAppender.append([cut, second], into: output)
+
+        XCTAssertEqual(try Data(contentsOf: output), try bytes.prefix(frames[lastWhole]) + Data(contentsOf: second))
+        let wholeFramesSeconds = Double(lastWhole * 1024) / 44_100
+        XCTAssertEqual(decodedSeconds(output), wholeFramesSeconds + decodedSeconds(second), accuracy: 3 * 1024.0 / 44_100)
+    }
+
+    func testAppend_failsClosedOnASegmentThatIsNotAdts() throws {
+        let first = try writeTone(named: "first.aac", seconds: 0.5)
+        let mpeg4 = try writeTone(named: "other.m4a", seconds: 0.5)
+        let output = directory.appendingPathComponent("joined.aac")
+
+        XCTAssertThrowsError(try AdtsSegmentAppender.append([first, mpeg4], into: output)) { error in
+            XCTAssertEqual(error as? AdtsSegmentAppenderError, .notAdts(mpeg4))
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.appendingPathExtension("appending").path))
+    }
+
     func testAppend_failsClosedWhenASegmentIsMissing() throws {
         let first = try writeTone(named: "first.aac", seconds: 0.5)
         let missing = directory.appendingPathComponent("missing.aac")
