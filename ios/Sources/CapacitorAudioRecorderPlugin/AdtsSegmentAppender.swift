@@ -211,7 +211,9 @@ enum AdtsSegmentAppender {
         plainSync: (Int32) -> Int32 = { fsync($0) }
     ) -> Bool {
         if fullSync(descriptor) == 0 { return true }
-        guard [ENOTSUP, ENOTTY, EINVAL].contains(errno) else { return false }
+        // Read at once: anything that runs before the check may set errno again.
+        let failure = errno
+        guard failure == ENOTSUP || failure == ENOTTY || failure == EINVAL else { return false }
         return plainSync(descriptor) == 0
     }
 

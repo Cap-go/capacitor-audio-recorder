@@ -160,6 +160,7 @@ final class AdtsSegmentAppenderTests: XCTestCase {
         let bytes = try Data(contentsOf: withAudio)
         let halfAFrame = directory.appendingPathComponent("c.aac")
         try bytes.prefix(adtsFrameOffsets(bytes)[1] - 3).write(to: halfAFrame)
+        let mpeg4 = try writeTone(named: "d.m4a", seconds: 0.5)
 
         XCTAssertEqual(try AdtsSegmentAppender.soleRecording(in: [withAudio]), withAudio)
         XCTAssertNil(try AdtsSegmentAppender.soleRecording(in: [withAudio, missing]))
@@ -168,6 +169,9 @@ final class AdtsSegmentAppenderTests: XCTestCase {
         }
         XCTAssertThrowsError(try AdtsSegmentAppender.soleRecording(in: [halfAFrame])) { error in
             XCTAssertEqual(error as? AdtsSegmentAppenderError, .noWholeFrame)
+        }
+        XCTAssertThrowsError(try AdtsSegmentAppender.soleRecording(in: [mpeg4])) { error in
+            XCTAssertEqual(error as? AdtsSegmentAppenderError, .notAdts(mpeg4))
         }
     }
 
@@ -212,6 +216,13 @@ final class AdtsSegmentAppenderTests: XCTestCase {
             XCTAssertEqual(error as? AdtsSegmentAppenderError, .notAdts(crc))
         }
         XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
+
+        // Exactly 9 bytes is a whole frame with a CRC: it is copied.
+        let nine = directory.appendingPathComponent("crc-9.aac")
+        let frame = Data([0xFF, 0xF0, 0x50, 0x80, 0x01, 0x3F, 0xFC, 0x00, 0x00])
+        try frame.write(to: nine)
+        XCTAssertEqual(try AdtsSegmentAppender.append([nine, nine], into: output), 18)
+        XCTAssertEqual(try Data(contentsOf: output), frame + frame)
     }
 
     /// With mergeFailed, `uri` points to the longest segment by the reported (precise) duration. The

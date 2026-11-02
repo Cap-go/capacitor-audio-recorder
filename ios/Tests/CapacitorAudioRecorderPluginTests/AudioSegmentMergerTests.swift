@@ -19,6 +19,15 @@ final class AudioSegmentMergerTests: XCTestCase {
 
         let fallback = AudioSegmentMerger.preferredFallbackSegment(from: [shortURL, emptyURL, longURL])
         XCTAssertEqual(fallback, longURL)
+
+        // The duration is read once per segment, not per comparison: a precise one reads the file.
+        var reads = 0
+        let counted = AudioSegmentMerger.preferredFallbackSegment(from: [shortURL, longURL, shortURL]) { url in
+            reads += 1
+            return AudioSegmentMerger.durationMilliseconds(for: url)
+        }
+        XCTAssertEqual(counted, longURL)
+        XCTAssertEqual(reads, 3)
     }
 
     func testMergeSegments_skipsEmptySegments() throws {
