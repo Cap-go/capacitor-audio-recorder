@@ -44,21 +44,24 @@ final class AdtsSegmentAppenderTests: XCTestCase {
 
     /// A segment that ends inside a frame: copied as is, that frame would swallow the start of the
     /// next segment and AVFoundation would stop decoding there. Only its whole frames are joined.
+    /// Cut 5 bytes in, the header is not whole yet; cut 20 bytes in, it is whole and claims bytes
+    /// that never came.
     func testAppend_aSegmentCutInsideAFrameKeepsTheNextSegment() throws {
-        let whole = try writeTone(named: "whole.aac", seconds: 2.0)
-        let bytes = try Data(contentsOf: whole)
+        let bytes = try Data(contentsOf: try writeTone(named: "whole.aac", seconds: 2.0))
         let frames = adtsFrameOffsets(bytes)
         let lastWhole = frames.count / 2
-        let cut = directory.appendingPathComponent("cut.aac")
-        try bytes.prefix(frames[lastWhole] + 5).write(to: cut)
         let second = try writeTone(named: "second.aac", seconds: 2.0)
-        let output = directory.appendingPathComponent("joined.aac")
+        for into in [5, 20] {
+            let cut = directory.appendingPathComponent("cut-\(into).aac")
+            try bytes.prefix(frames[lastWhole] + into).write(to: cut)
+            let output = directory.appendingPathComponent("joined-\(into).aac")
 
-        try AdtsSegmentAppender.append([cut, second], into: output)
+            try AdtsSegmentAppender.append([cut, second], into: output)
 
-        XCTAssertEqual(try Data(contentsOf: output), try bytes.prefix(frames[lastWhole]) + Data(contentsOf: second))
-        let wholeFramesSeconds = Double(lastWhole * 1024) / 44_100
-        XCTAssertEqual(decodedSeconds(output), wholeFramesSeconds + decodedSeconds(second), accuracy: 3 * 1024.0 / 44_100)
+            XCTAssertEqual(try Data(contentsOf: output), try bytes.prefix(frames[lastWhole]) + Data(contentsOf: second))
+            let wholeFramesSeconds = Double(lastWhole * 1024) / 44_100
+            XCTAssertEqual(decodedSeconds(output), wholeFramesSeconds + decodedSeconds(second), accuracy: 3 * 1024.0 / 44_100)
+        }
     }
 
     func testAppend_failsClosedOnASegmentThatIsNotAdts() throws {
