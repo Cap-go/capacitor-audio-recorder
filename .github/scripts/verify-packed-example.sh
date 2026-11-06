@@ -45,7 +45,16 @@ case "$platform" in
     fi
     bunx cap sync android
     cd android
-    ./gradlew build test
+    ./gradlew build test assembleRelease
+    mapping="app/build/outputs/mapping/release/mapping.txt"
+    if [ ! -f "$mapping" ]; then
+      echo "Expected R8 mapping at $mapping"
+      exit 1
+    fi
+    if ! grep -Fq 'app.capgo.audiorecorder.CapacitorAudioRecorderPlugin' "$mapping"; then
+      echo "Release mapping should list CapacitorAudioRecorderPlugin (R8 kept it)"
+      exit 1
+    fi
     ;;
   ios)
     if [ ! -d ios ]; then
