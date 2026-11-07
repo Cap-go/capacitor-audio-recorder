@@ -173,8 +173,9 @@ stopRecording() => Promise<StopRecordingResult>
 Stop the current recording and persist the recorded audio.
 
 On Android, when the recorder cannot stop cleanly, the call is rejected and the recording file
-is kept on disk; the rejection's `data.uri` points to it. On iOS, when the segments of an
-interrupted recording cannot be joined, the call resolves with `mergeFailed` and `segments`.
+is kept on disk; the rejection's `data.uri` points to it and `data.duration` reports elapsed
+time. On iOS, when the segments of an interrupted recording cannot be joined, the call resolves
+with `mergeFailed` and `segments`.
 
 **Returns:** <code>Promise&lt;<a href="#stoprecordingresult">StopRecordingResult</a>&gt;</code>
 
