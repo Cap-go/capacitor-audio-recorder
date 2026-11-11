@@ -91,7 +91,7 @@ export interface StartRecordingOptions {
    *   recording that ends in a crash, a force-quit or an empty battery is unreadable.
    * - `'aac'`: ADTS (AAC in an `.aac` file), a stream of self-contained frames. A recording that
    *   ends badly stays readable up to its last frame, and on iOS the segments of an interrupted
-   *   recording are joined byte for byte when it stops, without re-encoding.
+   *   recording are joined by copying complete frames only when it stops, without re-encoding.
    *
    * @default 'm4a'
    * @since 8.4.0
@@ -129,6 +129,11 @@ export interface StopRecordingResult {
   /**
    * The URI pointing to the recorded file. Only available on Android and iOS.
    *
+   * On Android the file is named `recording-yyyyMMdd-HHmmss-<uuid>.m4a` or
+   * `recording-yyyyMMdd-HHmmss-<uuid>.aac`, matching `format`. The UUID keeps two recordings
+   * started in the same second from overwriting each other. Earlier versions used
+   * `recording-yyyyMMdd-HHmmss.m4a` with no UUID and always the `.m4a` extension.
+   *
    * @since 1.0.0
    */
   uri?: string;
@@ -144,7 +149,10 @@ export interface StopRecordingResult {
 
   /**
    * The URIs of every segment of the recording, in recording order, when `mergeFailed` is `true`.
-   * They stay on disk, so the caller can still join them. Only available on iOS.
+   * They stay on disk so you can recover them. Do not concatenate the raw files blindly: a
+   * segment can end with an incomplete ADTS frame, and a naive join can break playback of what
+   * follows. Copy only complete frames from each segment (the same way the plugin joins them),
+   * or upload each segment separately and stitch them on the server. Only available on iOS.
    *
    * @since 8.4.0
    */
