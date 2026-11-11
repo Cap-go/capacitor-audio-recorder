@@ -149,10 +149,11 @@ export interface StopRecordingResult {
 
   /**
    * The URIs of every segment of the recording, in recording order, when `mergeFailed` is `true`.
-   * They stay on disk so you can recover them. Do not concatenate the raw files blindly: a
-   * segment can end with an incomplete ADTS frame, and a naive join can break playback of what
-   * follows. Copy only complete frames from each segment (the same way the plugin joins them),
-   * or upload each segment separately and stitch them on the server. Only available on iOS.
+   * They stay on disk so you can recover them. For `format: 'aac'`, a segment can end with an
+   * incomplete ADTS frame; do not concatenate the raw files blindly. Copy only complete frames
+   * from each segment (the same way the plugin joins them), or upload each segment separately
+   * and stitch them on the server. For `format: 'm4a'`, the segments cannot be joined by
+   * concatenation; remux them or stitch them server-side. Only available on iOS.
    *
    * @since 8.4.0
    */
