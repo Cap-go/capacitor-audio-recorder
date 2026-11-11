@@ -1,6 +1,6 @@
 # @capgo/capacitor-audio-recorder
 
-Record audio from the microphone on iOS, Android and the web with one Capacitor API. Pause, resume, read the input level and save the clip when you are done.
+Record audio from the microphone on iOS, Android and the web with one Capacitor API. Pause, resume, read the input level and save the clip when you are done. On Android and iOS, `format: 'aac'` keeps the recording playable even if the app crashes before a clean stop; Web ignores `format`. See the [crash-safe recording guide](https://capgo.app/docs/plugins/audio-recorder/getting-started/#crash-safe-recording-format-aac).
 
 <a href="https://capgo.app/?ref=plugin_audio_recorder"><img src="https://capgo.app/readme-banner.svg?repo=Cap-go/capacitor-audio-recorder" alt="Capgo - Build Capacitor apps with AI, ship updates instantly" /></a>
 
@@ -19,6 +19,7 @@ Record audio from the microphone on iOS, Android and the web with one Capacitor 
 ## Key features
 
 - **Record**: `startRecording()`, `stopRecording()` and `cancelRecording()` to capture or discard a clip.
+- **Crash-safe AAC**: set `format: 'aac'` on `startRecording` (Android and iOS) to write ADTS. The file stays readable up to the last complete frame after a crash, a force-quit, or a killed `mediaserver`. `'m4a'` stays the default. [Crash-safe recording guide](https://capgo.app/docs/plugins/audio-recorder/getting-started/#crash-safe-recording-format-aac).
 - **Pause and resume**: `pauseRecording()` and `resumeRecording()` without starting a new file.
 - **Input level**: `getCurrentAmplitude()` returns the microphone level from 0 to 1 for meters and waveforms.
 - **Status and events**: `getRecordingStatus()` plus `recordingPaused`, `recordingStopped`, `recordingError`, and (iOS only) `recordingInterruptionBegan` / `recordingInterruptionEnded` listeners.
@@ -88,6 +89,10 @@ The plugin does not automatically put your app into a background-safe mode, you 
   ```
 
   Then start a foreground service before calling `startRecording` (or trigger the recording inside that service). The plugin itself does not create the service for you, so you can use your preferred foreground-service implementation or a background-task helper plugin to start/stop it alongside the recording UI.
+
+## Android file names
+
+On Android, recordings are saved as `recording-yyyyMMdd-HHmmss-<uuid>.m4a` or `.aac`, matching the `format` you passed to `startRecording`. The UUID means two recordings started in the same second do not overwrite each other. Earlier versions used `recording-yyyyMMdd-HHmmss.m4a` (no UUID, always `.m4a`).
 
 ## API
 
@@ -171,6 +176,12 @@ stopRecording() => Promise<StopRecordingResult>
 ```
 
 Stop the current recording and persist the recorded audio.
+
+On Android, when the recorder cannot stop cleanly, the call is rejected and the recording file
+is kept on disk; the rejection's `data.uri` points to it and `data.duration` reports elapsed
+time. On iOS, when the segments of an interrupted recording cannot be joined but a fallback
+segment exists, the call resolves with `mergeFailed` and `segments`. When finalization fails
+with no fallback segment, the call is rejected; segment files remain on disk.
 
 **Returns:** <code>Promise&lt;<a href="#stoprecordingresult">StopRecordingResult</a>&gt;</code>
 
@@ -416,24 +427,27 @@ Get the native Capacitor plugin version.
 
 Options accepted by {@link CapacitorAudioRecorderPlugin.startRecording}.
 
-| Prop                              | Type                                                          | Description                                                                                                                                                                                                                                             | Since  |
-| --------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| **`audioSessionCategoryOptions`** | <code>AudioSessionCategoryOption[]</code>                     | The audio session category options for recording. Only available on iOS.                                                                                                                                                                                | 1.0.0  |
-| **`audioSessionMode`**            | <code><a href="#audiosessionmode">AudioSessionMode</a></code> | The audio session mode for recording. Only available on iOS.                                                                                                                                                                                            | 1.0.0  |
-| **`bitRate`**                     | <code>number</code>                                           | The audio bit rate in bytes per second. Only available on Android and iOS.                                                                                                                                                                              | 1.0.0  |
-| **`sampleRate`**                  | <code>number</code>                                           | The audio sample rate in Hz. Only available on Android and iOS.                                                                                                                                                                                         | 1.0.0  |
-| **`resetToPlaybackOnStop`**       | <code>boolean</code>                                          | When `true`, reset the iOS `AVAudioSession` category to `.playback` when recording stops or is canceled. This avoids quiet in-app playback of the just-recorded file while the session is still configured for `.playAndRecord`. Only available on iOS. | 8.2.10 |
+| Prop                              | Type                                                          | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Default            | Since  |
+| --------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ------ |
+| **`audioSessionCategoryOptions`** | <code>AudioSessionCategoryOption[]</code>                     | The audio session category options for recording. Only available on iOS.                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |                    | 1.0.0  |
+| **`audioSessionMode`**            | <code><a href="#audiosessionmode">AudioSessionMode</a></code> | The audio session mode for recording. Only available on iOS.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |                    | 1.0.0  |
+| **`bitRate`**                     | <code>number</code>                                           | The audio bit rate in bytes per second. Only available on Android and iOS.                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |                    | 1.0.0  |
+| **`sampleRate`**                  | <code>number</code>                                           | The audio sample rate in Hz. Only available on Android and iOS.                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |                    | 1.0.0  |
+| **`resetToPlaybackOnStop`**       | <code>boolean</code>                                          | When `true`, reset the iOS `AVAudioSession` category to `.playback` when recording stops or is canceled. This avoids quiet in-app playback of the just-recorded file while the session is still configured for `.playAndRecord`. Only available on iOS.                                                                                                                                                                                                                                                                                      |                    | 8.2.10 |
+| **`format`**                      | <code><a href="#recordingformat">RecordingFormat</a></code>   | The container the recording is written in. Only available on Android and iOS. - `'m4a'`: MPEG-4 (AAC in an `.m4a` file). Its index is written when the recording stops, so a recording that ends in a crash, a force-quit or an empty battery is unreadable. - `'aac'`: ADTS (AAC in an `.aac` file), a stream of self-contained frames. A recording that ends badly stays readable up to its last frame, and on iOS the segments of an interrupted recording are joined by copying complete frames only when it stops, without re-encoding. | <code>'m4a'</code> | 8.4.0  |
 
 
 #### StopRecordingResult
 
 Result returned by {@link CapacitorAudioRecorderPlugin.stopRecording}.
 
-| Prop           | Type                | Description                                                               | Since |
-| -------------- | ------------------- | ------------------------------------------------------------------------- | ----- |
-| **`blob`**     | <code>Blob</code>   | The recorded audio as a Blob. Only available on Web.                      | 1.0.0 |
-| **`duration`** | <code>number</code> | The duration of the recording in milliseconds.                            | 1.0.0 |
-| **`uri`**      | <code>string</code> | The URI pointing to the recorded file. Only available on Android and iOS. | 1.0.0 |
+| Prop              | Type                  | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Since |
+| ----------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| **`blob`**        | <code>Blob</code>     | The recorded audio as a Blob. Only available on Web.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 1.0.0 |
+| **`duration`**    | <code>number</code>   | The duration of the recording in milliseconds.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 1.0.0 |
+| **`uri`**         | <code>string</code>   | The URI pointing to the recorded file. Only available on Android and iOS. On Android the file is named `recording-yyyyMMdd-HHmmss-&lt;uuid&gt;.m4a` or `recording-yyyyMMdd-HHmmss-&lt;uuid&gt;.aac`, matching `format`. The UUID keeps two recordings started in the same second from overwriting each other. Earlier versions used `recording-yyyyMMdd-HHmmss.m4a` with no UUID and always the `.m4a` extension.                                                                                                                              | 1.0.0 |
+| **`mergeFailed`** | <code>boolean</code>  | `true` when the segments of an interrupted recording could not be joined. `uri` then points to the longest segment (or, when no segment has a readable duration, the largest file), and `segments` lists all of them. Only available on iOS.                                                                                                                                                                                                                                                                                                   | 8.4.0 |
+| **`segments`**    | <code>string[]</code> | The URIs of every segment of the recording, in recording order, when `mergeFailed` is `true`. They stay on disk so you can recover them. For `format: 'aac'`, a segment can end with an incomplete ADTS frame; do not concatenate the raw files blindly. Copy only complete frames from each segment (the same way the plugin joins them), or upload each segment separately and stitch them on the server. For `format: 'm4a'`, the segments cannot be joined by concatenation; remux them or stitch them server-side. Only available on iOS. | 8.4.0 |
 
 
 #### GetRecordingStatusResult
@@ -491,6 +505,13 @@ Event emitted when an audio session interruption ends on iOS (for example after 
 
 
 ### Type Aliases
+
+
+#### RecordingFormat
+
+The container of a recording; see <a href="#startrecordingoptions">`StartRecordingOptions.format`</a>.
+
+<code>'m4a' | 'aac'</code>
 
 
 #### PermissionState

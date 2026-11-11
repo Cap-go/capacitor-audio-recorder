@@ -83,7 +83,28 @@ export interface StartRecordingOptions {
    * @since 8.2.10
    */
   resetToPlaybackOnStop?: boolean;
+
+  /**
+   * The container the recording is written in. Only available on Android and iOS.
+   *
+   * - `'m4a'`: MPEG-4 (AAC in an `.m4a` file). Its index is written when the recording stops, so a
+   *   recording that ends in a crash, a force-quit or an empty battery is unreadable.
+   * - `'aac'`: ADTS (AAC in an `.aac` file), a stream of self-contained frames. A recording that
+   *   ends badly stays readable up to its last frame, and on iOS the segments of an interrupted
+   *   recording are joined by copying complete frames only when it stops, without re-encoding.
+   *
+   * @default 'm4a'
+   * @since 8.4.0
+   */
+  format?: RecordingFormat;
 }
+
+/**
+ * The container of a recording; see `StartRecordingOptions.format`.
+ *
+ * @since 8.4.0
+ */
+export type RecordingFormat = 'm4a' | 'aac';
 
 /**
  * Result returned by {@link CapacitorAudioRecorderPlugin.stopRecording}.
@@ -108,9 +129,35 @@ export interface StopRecordingResult {
   /**
    * The URI pointing to the recorded file. Only available on Android and iOS.
    *
+   * On Android the file is named `recording-yyyyMMdd-HHmmss-<uuid>.m4a` or
+   * `recording-yyyyMMdd-HHmmss-<uuid>.aac`, matching `format`. The UUID keeps two recordings
+   * started in the same second from overwriting each other. Earlier versions used
+   * `recording-yyyyMMdd-HHmmss.m4a` with no UUID and always the `.m4a` extension.
+   *
    * @since 1.0.0
    */
   uri?: string;
+
+  /**
+   * `true` when the segments of an interrupted recording could not be joined. `uri` then points
+   * to the longest segment (or, when no segment has a readable duration, the largest file), and
+   * `segments` lists all of them. Only available on iOS.
+   *
+   * @since 8.4.0
+   */
+  mergeFailed?: boolean;
+
+  /**
+   * The URIs of every segment of the recording, in recording order, when `mergeFailed` is `true`.
+   * They stay on disk so you can recover them. For `format: 'aac'`, a segment can end with an
+   * incomplete ADTS frame; do not concatenate the raw files blindly. Copy only complete frames
+   * from each segment (the same way the plugin joins them), or upload each segment separately
+   * and stitch them on the server. For `format: 'm4a'`, the segments cannot be joined by
+   * concatenation; remux them or stitch them server-side. Only available on iOS.
+   *
+   * @since 8.4.0
+   */
+  segments?: string[];
 }
 
 /**
@@ -252,6 +299,12 @@ export interface CapacitorAudioRecorderPlugin {
 
   /**
    * Stop the current recording and persist the recorded audio.
+   *
+   * On Android, when the recorder cannot stop cleanly, the call is rejected and the recording file
+   * is kept on disk; the rejection's `data.uri` points to it and `data.duration` reports elapsed
+   * time. On iOS, when the segments of an interrupted recording cannot be joined but a fallback
+   * segment exists, the call resolves with `mergeFailed` and `segments`. When finalization fails
+   * with no fallback segment, the call is rejected; segment files remain on disk.
    *
    * @returns Recording metadata such as duration and URI/blob.
    * @since 1.0.0
